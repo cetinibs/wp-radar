@@ -196,6 +196,30 @@ class WPGK_Logger {
 	}
 
 	/**
+	 * Son N saatteki olay sayımlarını seviyeye göre döndürür (panel panosu için).
+	 *
+	 * @param int $saat Geriye dönük pencere (saat).
+	 * @return array array('kritik'=>int,'uyari'=>int,'bilgi'=>int)
+	 */
+	public static function seviye_sayimlari( $saat = 24 ) {
+		global $wpdb;
+		$tablo = $wpdb->prefix . self::TABLO;
+		// zaman yerel saatle (current_time('mysql')) saklandığı için eşik de yerel olmalı:
+		// gmdate(yerel_epoch) yerel duvar-saati dizesini verir.
+		$esik = gmdate( 'Y-m-d H:i:s', (int) current_time( 'timestamp' ) - ( (int) $saat * HOUR_IN_SECONDS ) );
+		$satirlar = $wpdb->get_results(
+			$wpdb->prepare( "SELECT seviye, COUNT(*) AS adet FROM {$tablo} WHERE zaman >= %s GROUP BY seviye", $esik )
+		);
+		$cikti = array( 'kritik' => 0, 'uyari' => 0, 'bilgi' => 0 );
+		foreach ( (array) $satirlar as $s ) {
+			if ( isset( $cikti[ $s->seviye ] ) ) {
+				$cikti[ $s->seviye ] = (int) $s->adet;
+			}
+		}
+		return $cikti;
+	}
+
+	/**
 	 * Son olayları getirir.
 	 */
 	public static function son_olaylar( $limit = 100 ) {

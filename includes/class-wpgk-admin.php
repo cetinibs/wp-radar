@@ -108,6 +108,7 @@ class WPGK_Admin {
 			array( 'silinen' => $silinen, 'tespit' => $tespit, 'zaman' => current_time( 'mysql' ) ),
 			60
 		);
+		update_option( 'wpgk_son_tarama', current_time( 'mysql' ) );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=wpgk-panel&wpgk_tarandi=1' ) );
 		exit;
@@ -176,6 +177,9 @@ class WPGK_Admin {
 			'cekirdek_butunluk'     => isset( $_POST['cekirdek_butunluk'] ) ? 1 : 0,
 			'link_korumasi'         => isset( $_POST['link_korumasi'] ) ? 1 : 0,
 			'zararli_domainler'     => isset( $_POST['zararli_domainler'] ) ? sanitize_textarea_field( wp_unslash( $_POST['zararli_domainler'] ) ) : '',
+			// VirusTotal
+			'vt_api_key'            => isset( $_POST['vt_api_key'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['vt_api_key'] ) ) : '',
+			'vt_otomatik'           => isset( $_POST['vt_otomatik'] ) ? 1 : 0,
 			// Giriş / brute-force
 			'giris_korumasi'        => isset( $_POST['giris_korumasi'] ) ? 1 : 0,
 			'giris_jenerik_hata'    => isset( $_POST['giris_jenerik_hata'] ) ? 1 : 0,
@@ -211,6 +215,20 @@ class WPGK_Admin {
 		$ayarlar = get_option( 'wpgk_ayarlar', array() );
 		settings_errors( 'wpgk' );
 
+		// VirusTotal anlık tarama (URL veya SHA-256). Salt-okunur eylem; burada işlenir.
+		$vt_sonuc = null;
+		$vt_girdi = '';
+		if ( isset( $_POST['wpgk_vt_nonce'] )
+			&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wpgk_vt_nonce'] ) ), 'wpgk_vt_tara' )
+			&& current_user_can( 'manage_options' ) ) {
+			$vt_girdi = isset( $_POST['wpgk_vt_girdi'] ) ? sanitize_text_field( wp_unslash( $_POST['wpgk_vt_girdi'] ) ) : '';
+			if ( '' !== $vt_girdi ) {
+				$vt_sonuc = preg_match( '/^[a-fA-F0-9]{64}$/', $vt_girdi )
+					? WPGK_VirusTotal::dosya_raporu( $vt_girdi )
+					: WPGK_VirusTotal::url_raporu( $vt_girdi );
+			}
+		}
+
 		$secenekler = array(
 			'kullanici_korumasi'    => 'Kullanıcı koruması (yetkisiz admin oluşturma/rol yükseltme engelle)',
 			'dosya_korumasi'        => 'Dosya koruması (root/uploads içine shell & PHP yazımını engelle)',
@@ -237,95 +255,209 @@ class WPGK_Admin {
 			'link_korumasi'         => 'Zararlı link koruması (ön yüzde spam linklerini otomatik temizle)',
 			'eposta_bildirimi'      => 'Kritik olaylarda e-posta bildirimi gönder',
 		);
-		?>
-		<div class="wrap">
-			<h1>WP Radar</h1>
-			<p>Kapsamlı WordPress güvenlik radarı: brute-force, sızma, zararlı dosya/klasör ve spam link koruması.</p>
+		// Gruplandırılmış koruma seçenekleri (kullanıcı dostu kartlar).
+		$gruplar = array(
+			'Giriş & Kullanıcı'        => array( 'kullanici_korumasi', 'giris_korumasi', 'giris_jenerik_hata' ),
+			'Ağ & İstek (Firewall)'    => array( 'exploit_korumasi', 'kotu_bot_engelle', 'xmlrpc_kapat', 'xmlrpc_tam_engel', 'pingback_kapat', 'sitemap_kullanici_gizle' ),
+			'Dosya & Sistem'           => array( 'dosya_korumasi', 'dosya_duzenleme_kapat', 'cekirdek_butunluk', 'yapi_korumasi', 'kok_klasor_korumasi', 'kok_klasor_otomatik_sil', 'hassas_dosya_koru', 'dizin_listeleme_kapat' ),
+			'Sertleştirme (Hardening)' => array( 'guvenlik_basliklari', 'surum_gizle', 'hsts', 'hsts_preload' ),
+			'İçerik'                   => array( 'icerik_korumasi', 'link_korumasi' ),
+		);
 
-			<form method="post" style="margin-bottom:16px;">
+		// Pano metrikleri.
+		$sayim       = WPGK_Logger::seviye_sayimlari( 24 );
+		$tum_toggle  = array_merge( array( 'eposta_bildirimi' ), $gruplar['Giriş & Kullanıcı'], $gruplar['Ağ & İstek (Firewall)'], $gruplar['Dosya & Sistem'], $gruplar['Sertleştirme (Hardening)'], $gruplar['İçerik'] );
+		$aktif_sayi  = 0;
+		foreach ( $tum_toggle as $k ) {
+			if ( ! empty( $ayarlar[ $k ] ) ) {
+				$aktif_sayi++;
+			}
+		}
+		$toplam_modul = count( $tum_toggle );
+		$vt_aktif     = WPGK_VirusTotal::aktif();
+		$son_tarama   = get_option( 'wpgk_son_tarama', '' );
+		?>
+		<div class="wrap wpgk-wrap">
+			<h1><span class="dashicons dashicons-shield" style="font-size:28px;width:28px;height:28px;vertical-align:-4px;"></span> WP Radar</h1>
+			<p class="description">Kapsamlı WordPress güvenlik radarı: brute-force, sızma, zararlı dosya/klasör, spam link koruması ve VirusTotal itibar kontrolü.</p>
+
+			<style>
+				.wpgk-cards{display:flex;flex-wrap:wrap;gap:14px;margin:16px 0 24px}
+				.wpgk-card{flex:1 1 200px;background:#fff;border:1px solid #dcdcde;border-left-width:4px;border-radius:6px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+				.wpgk-card .num{font-size:26px;font-weight:600;line-height:1.2}
+				.wpgk-card .lbl{color:#646970;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+				.wpgk-card.ok{border-left-color:#00a32a}.wpgk-card.warn{border-left-color:#dba617}.wpgk-card.bad{border-left-color:#d63638}.wpgk-card.info{border-left-color:#2271b1}
+				.wpgk-section{background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:4px 18px 10px;margin:0 0 18px}
+				.wpgk-section h2{font-size:15px;margin:14px 0 4px;padding-bottom:8px;border-bottom:1px solid #f0f0f1}
+				.wpgk-toggle{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f6f7f7}
+				.wpgk-toggle:last-child{border-bottom:0}
+				.wpgk-toggle input{margin-top:3px}
+				.wpgk-badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
+				.wpgk-badge.on{background:#edfaef;color:#00782b}.wpgk-badge.off{background:#fcf0f1;color:#b32d2e}
+			</style>
+
+			<!-- DURUM PANOSU -->
+			<div class="wpgk-cards">
+				<div class="wpgk-card ok">
+					<div class="num"><?php echo (int) $aktif_sayi; ?>/<?php echo (int) $toplam_modul; ?></div>
+					<div class="lbl">Aktif koruma modülü</div>
+				</div>
+				<div class="wpgk-card <?php echo $sayim['kritik'] > 0 ? 'bad' : 'ok'; ?>">
+					<div class="num"><?php echo (int) $sayim['kritik']; ?></div>
+					<div class="lbl">Son 24s kritik olay</div>
+				</div>
+				<div class="wpgk-card <?php echo $sayim['uyari'] > 0 ? 'warn' : 'ok'; ?>">
+					<div class="num"><?php echo (int) $sayim['uyari']; ?></div>
+					<div class="lbl">Son 24s uyarı</div>
+				</div>
+				<div class="wpgk-card <?php echo $vt_aktif ? 'ok' : 'info'; ?>">
+					<div class="num"><span class="wpgk-badge <?php echo $vt_aktif ? 'on' : 'off'; ?>"><?php echo $vt_aktif ? 'Aktif' : 'Pasif'; ?></span></div>
+					<div class="lbl">VirusTotal</div>
+				</div>
+				<div class="wpgk-card info">
+					<div class="num" style="font-size:15px;padding-top:6px;"><?php echo $son_tarama ? esc_html( $son_tarama ) : '—'; ?></div>
+					<div class="lbl">Son tarama</div>
+				</div>
+			</div>
+
+			<form method="post" style="margin-bottom:20px;">
 				<?php wp_nonce_field( 'wpgk_tarama', 'wpgk_tara_nonce' ); ?>
-				<?php submit_button( 'Şimdi Tara', 'primary', 'wpgk_tara_simdi', false ); ?>
+				<?php submit_button( 'Şimdi Tara', 'primary large', 'wpgk_tara_simdi', false ); ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=wpgk-gunluk' ) ); ?>" class="button button-secondary" style="margin-left:6px;">Olay Günlüğü</a>
 				<span class="description" style="margin-left:8px;">Önce tarar, ardından kanıtlı zararlıları engeller.</span>
 			</form>
 
+			<!-- VIRUSTOTAL ARACI -->
+			<div class="wpgk-section">
+				<h2><span class="dashicons dashicons-search" style="vertical-align:-3px;"></span> VirusTotal ile Tara</h2>
+				<p class="description">Bir URL veya dosya SHA-256 özetini 70+ güvenlik motoruyla kontrol edin. <?php echo $vt_aktif ? '' : '<strong>Önce aşağıdan API anahtarını kaydedin.</strong>'; ?></p>
+				<form method="post" style="margin:8px 0;">
+					<?php wp_nonce_field( 'wpgk_vt_tara', 'wpgk_vt_nonce' ); ?>
+					<input type="text" name="wpgk_vt_girdi" class="regular-text" style="width:60%;" placeholder="https://ornek.com/  veya  SHA-256 özeti" value="<?php echo esc_attr( $vt_girdi ); ?>" <?php disabled( ! $vt_aktif ); ?> />
+					<?php submit_button( 'Tara', 'secondary', 'wpgk_vt_gonder', false, $vt_aktif ? array() : array( 'disabled' => 'disabled' ) ); ?>
+				</form>
+				<?php if ( null !== $vt_sonuc ) : ?>
+					<?php if ( is_wp_error( $vt_sonuc ) ) : ?>
+						<div class="notice notice-error inline"><p><?php echo esc_html( $vt_sonuc->get_error_message() ); ?></p></div>
+					<?php elseif ( ! empty( $vt_sonuc['beklemede'] ) ) : ?>
+						<div class="notice notice-info inline"><p><?php echo esc_html( $vt_sonuc['mesaj'] ); ?></p></div>
+					<?php elseif ( empty( $vt_sonuc['bulundu'] ) ) : ?>
+						<div class="notice notice-warning inline"><p>VirusTotal kaydı bulunamadı (bu öğe daha önce taranmamış).</p></div>
+					<?php else :
+						$z = (int) $vt_sonuc['zararli'];
+						$s = (int) $vt_sonuc['supheli'];
+						$t = (int) $vt_sonuc['toplam'];
+						$sinif = $z > 0 ? 'error' : ( $s > 0 ? 'warning' : 'success' );
+						?>
+						<div class="notice notice-<?php echo esc_attr( $sinif ); ?> inline">
+							<p>
+								<strong><?php echo esc_html( $z ); ?>/<?php echo esc_html( $t ); ?></strong> motor <strong>zararlı</strong>, <strong><?php echo esc_html( $s ); ?></strong> şüpheli olarak işaretledi.
+								<?php if ( ! empty( $vt_sonuc['gui'] ) ) : ?>
+									&nbsp;<a href="<?php echo esc_url( $vt_sonuc['gui'] ); ?>" target="_blank" rel="noopener">VirusTotal'da aç ↗</a>
+								<?php endif; ?>
+							</p>
+						</div>
+					<?php endif; ?>
+				<?php endif; ?>
+			</div>
+
+			<!-- AYARLAR -->
 			<form method="post">
 				<?php wp_nonce_field( 'wpgk_ayar_kaydet', 'wpgk_ayar_nonce' ); ?>
-				<table class="form-table">
-					<?php foreach ( $secenekler as $anahtar => $etiket ) : ?>
-						<tr>
-							<th scope="row"><?php echo esc_html( $etiket ); ?></th>
-							<td>
-								<label>
-									<input type="checkbox" name="<?php echo esc_attr( $anahtar ); ?>" value="1" <?php checked( ! empty( $ayarlar[ $anahtar ] ) ); ?> />
-									Etkin
-								</label>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-					<tr>
-						<th scope="row">Giriş kilidi eşiği</th>
-						<td>
-							<input type="number" name="giris_max_deneme" min="1" max="50" value="<?php echo esc_attr( isset( $ayarlar['giris_max_deneme'] ) ? $ayarlar['giris_max_deneme'] : 5 ); ?>" class="small-text" /> başarısız denemeden sonra
-							<input type="number" name="giris_kilit_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['giris_kilit_dk'] ) ? $ayarlar['giris_kilit_dk'] : 15 ); ?>" class="small-text" /> dakika kilitle.
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">İzinli kök klasörler</th>
-						<td>
-							<textarea name="kok_izinli" rows="3" class="large-text" placeholder="Her satıra bir klasör adı (ör. shop, blog)"><?php echo esc_textarea( isset( $ayarlar['kok_izinli'] ) ? $ayarlar['kok_izinli'] : '' ); ?></textarea>
-							<p class="description">wp-admin, wp-content, wp-includes ve sistem klasörleri zaten izinlidir. Kök dizinde meşru özel bir klasörünüz varsa (ör. ayrı bir uygulama), adını buraya ekleyin.</p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">Zararlı domainler (kara liste)</th>
-						<td>
-							<textarea name="zararli_domainler" rows="3" class="large-text" placeholder="Her satıra bir domain (ör. kotusite.com)"><?php echo esc_textarea( isset( $ayarlar['zararli_domainler'] ) ? $ayarlar['zararli_domainler'] : '' ); ?></textarea>
-							<p class="description">Bu domainlere giden bağlantılar ön yüzde otomatik temizlenir (alt alan adları dahil).</p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">Bildirim e-posta adresleri</th>
-						<td>
-							<textarea name="bildirim_eposta" rows="3" class="regular-text" placeholder="Her satıra bir e-posta adresi (veya virgülle ayırın)"><?php echo esc_textarea( isset( $ayarlar['bildirim_eposta'] ) ? $ayarlar['bildirim_eposta'] : get_option( 'admin_email' ) ); ?></textarea>
-							<p class="description">Kritik güvenlik olaylarında (yetkisiz admin, web shell, çekirdek değişikliği, brute-force vb.) bu adreslere anlık e-posta gönderilir. Birden çok adres ekleyebilirsiniz.</p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">Tekrar-bildirim engeli</th>
-						<td>
-							Aynı saldırı için
-							<input type="number" name="bildirim_throttle_dk" min="0" max="1440" value="<?php echo esc_attr( isset( $ayarlar['bildirim_throttle_dk'] ) ? $ayarlar['bildirim_throttle_dk'] : 60 ); ?>" class="small-text" />
-							dakikada bir bildir.
-							<p class="description">E-posta yağmurunu önler: bildirimler <strong>olay türü + saldıran IP bloğu (/24)</strong> bazında gruplanır. Aynı IP'den ya da aynı bloktan gelen yüzlerce istek/deneme için yalnızca <strong>tek</strong> e-posta gider; ilk olay anında iletilir, bu süre boyunca tekrarı susturulur. Farklı bir saldırı türü veya farklı bir IP bloğu ayrı bildirim olarak gelir. <strong>0</strong> = her olayda gönder (önerilmez). 1440 = günde bir.</p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">Güvenilir yöneticiler</th>
-						<td>
-							<?php
-							$guvenilir = WPGK_User_Guard::guvenilir_adminler();
-							if ( $guvenilir ) {
-								$adlar = array();
-								foreach ( $guvenilir as $id ) {
-									$u = get_userdata( $id );
-									if ( $u ) {
-										$adlar[] = esc_html( $u->user_login . ' (ID ' . $id . ')' );
-									}
+
+				<?php foreach ( $gruplar as $baslik => $anahtarlar ) : ?>
+					<div class="wpgk-section">
+						<h2><?php echo esc_html( $baslik ); ?></h2>
+						<?php foreach ( $anahtarlar as $anahtar ) : ?>
+							<label class="wpgk-toggle">
+								<input type="checkbox" name="<?php echo esc_attr( $anahtar ); ?>" value="1" <?php checked( ! empty( $ayarlar[ $anahtar ] ) ); ?> />
+								<span><?php echo esc_html( isset( $secenekler[ $anahtar ] ) ? $secenekler[ $anahtar ] : $anahtar ); ?></span>
+							</label>
+						<?php endforeach; ?>
+
+						<?php if ( 'Giriş & Kullanıcı' === $baslik ) : ?>
+							<div style="padding:12px 0 6px;">
+								<strong>Giriş kilidi eşiği:</strong>
+								<input type="number" name="giris_max_deneme" min="1" max="50" value="<?php echo esc_attr( isset( $ayarlar['giris_max_deneme'] ) ? $ayarlar['giris_max_deneme'] : 5 ); ?>" class="small-text" /> başarısız denemeden sonra
+								<input type="number" name="giris_kilit_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['giris_kilit_dk'] ) ? $ayarlar['giris_kilit_dk'] : 15 ); ?>" class="small-text" /> dakika kilitle.
+							</div>
+						<?php elseif ( 'Dosya & Sistem' === $baslik ) : ?>
+							<div style="padding:12px 0 6px;">
+								<strong>İzinli kök klasörler:</strong>
+								<textarea name="kok_izinli" rows="2" class="large-text" placeholder="Her satıra bir klasör adı (ör. shop, blog)"><?php echo esc_textarea( isset( $ayarlar['kok_izinli'] ) ? $ayarlar['kok_izinli'] : '' ); ?></textarea>
+								<p class="description">wp-admin, wp-content, wp-includes ve sistem klasörleri zaten izinlidir. Kök dizinde meşru özel bir klasörünüz varsa adını buraya ekleyin.</p>
+							</div>
+						<?php elseif ( 'İçerik' === $baslik ) : ?>
+							<div style="padding:12px 0 6px;">
+								<strong>Zararlı domainler (kara liste):</strong>
+								<textarea name="zararli_domainler" rows="2" class="large-text" placeholder="Her satıra bir domain (ör. kotusite.com)"><?php echo esc_textarea( isset( $ayarlar['zararli_domainler'] ) ? $ayarlar['zararli_domainler'] : '' ); ?></textarea>
+								<p class="description">Bu domainlere giden bağlantılar ön yüzde otomatik temizlenir (alt alan adları dahil).</p>
+							</div>
+						<?php endif; ?>
+					</div>
+				<?php endforeach; ?>
+
+				<!-- VIRUSTOTAL AYARI -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-shield-alt" style="vertical-align:-3px;"></span> VirusTotal</h2>
+					<div style="padding:10px 0 6px;">
+						<strong>API anahtarı:</strong>
+						<input type="password" name="vt_api_key" class="regular-text" autocomplete="off" value="<?php echo esc_attr( isset( $ayarlar['vt_api_key'] ) ? $ayarlar['vt_api_key'] : '' ); ?>" placeholder="VirusTotal API anahtarınız" />
+						<p class="description"><a href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noopener">virustotal.com</a> üzerinden ücretsiz bir hesap açıp API anahtarınızı buraya yapıştırın. Ücretsiz anahtar ~4 istek/dakika ile sınırlıdır.</p>
+					</div>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="vt_otomatik" value="1" <?php checked( ! empty( $ayarlar['vt_otomatik'] ) ); ?> />
+						<span>Otomatik doğrulama: uploads taramasında bulunan şüpheli dosyaların SHA-256 özetini VirusTotal ile doğrula (çalışma başına en fazla 4 sorgu).</span>
+					</label>
+				</div>
+
+				<!-- BİLDİRİM -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-email-alt" style="vertical-align:-3px;"></span> Bildirim</h2>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="eposta_bildirimi" value="1" <?php checked( ! empty( $ayarlar['eposta_bildirimi'] ) ); ?> />
+						<span>Kritik olaylarda e-posta bildirimi gönder</span>
+					</label>
+					<div style="padding:10px 0 6px;">
+						<strong>Bildirim e-posta adresleri:</strong>
+						<textarea name="bildirim_eposta" rows="2" class="regular-text" placeholder="Her satıra bir e-posta adresi (veya virgülle ayırın)"><?php echo esc_textarea( isset( $ayarlar['bildirim_eposta'] ) ? $ayarlar['bildirim_eposta'] : get_option( 'admin_email' ) ); ?></textarea>
+						<p class="description">Kritik güvenlik olaylarında bu adreslere anlık e-posta gönderilir. Birden çok adres ekleyebilirsiniz.</p>
+					</div>
+					<div style="padding:6px 0;">
+						<strong>Tekrar-bildirim engeli:</strong> Aynı saldırı için
+						<input type="number" name="bildirim_throttle_dk" min="0" max="1440" value="<?php echo esc_attr( isset( $ayarlar['bildirim_throttle_dk'] ) ? $ayarlar['bildirim_throttle_dk'] : 60 ); ?>" class="small-text" /> dakikada bir bildir.
+						<p class="description">Bildirimler <strong>olay türü + saldıran IP bloğu (/24)</strong> bazında gruplanır; aynı kaynaktan gelen yüzlerce istek için tek e-posta gider. İlk olay anında iletilir. <strong>0</strong> = her olayda, <strong>1440</strong> = günde bir.</p>
+					</div>
+				</div>
+
+				<!-- GÜVENİLİR YÖNETİCİLER -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-admin-users" style="vertical-align:-3px;"></span> Güvenilir Yöneticiler</h2>
+					<p style="margin:8px 0;">
+						<?php
+						$guvenilir = WPGK_User_Guard::guvenilir_adminler();
+						if ( $guvenilir ) {
+							$adlar = array();
+							foreach ( $guvenilir as $id ) {
+								$u = get_userdata( $id );
+								if ( $u ) {
+									$adlar[] = esc_html( $u->user_login . ' (ID ' . $id . ')' );
 								}
-								echo wp_kses_post( implode( ', ', $adlar ) );
-							} else {
-								echo 'Tanımlı değil';
 							}
-							?>
-							<p><label><input type="checkbox" name="wpgk_admin_senkron" value="1" /> Mevcut tüm yöneticileri güvenilir listeyle yeniden senkronla</label></p>
-							<p class="description">Dikkat: Senkron, o anda var olan tüm administrator hesaplarını güvenilir kabul eder. Yalnızca hesapların temiz olduğundan eminseniz işaretleyin.</p>
-						</td>
-					</tr>
-				</table>
-				<?php submit_button( 'Ayarları Kaydet' ); ?>
+							echo wp_kses_post( implode( ', ', $adlar ) );
+						} else {
+							echo 'Tanımlı değil';
+						}
+						?>
+					</p>
+					<label class="wpgk-toggle"><input type="checkbox" name="wpgk_admin_senkron" value="1" /> <span>Mevcut tüm yöneticileri güvenilir listeyle yeniden senkronla</span></label>
+					<p class="description">Dikkat: Senkron, o anda var olan tüm administrator hesaplarını güvenilir kabul eder. Yalnızca hesapların temiz olduğundan eminseniz işaretleyin.</p>
+				</div>
+
+				<?php submit_button( 'Ayarları Kaydet', 'primary large' ); ?>
 			</form>
 
-			<form method="post" style="margin-top:8px;">
+			<form method="post" style="margin-top:-6px;">
 				<?php wp_nonce_field( 'wpgk_test_mail', 'wpgk_test_mail_nonce' ); ?>
 				<?php submit_button( 'Test E-postası Gönder', 'secondary', 'wpgk_test_mail_gonder', false ); ?>
 				<span class="description" style="margin-left:8px;">Kayıtlı alıcılara bir test bildirimi yollar. Önce adresleri kaydedin, sonra test edin.</span>

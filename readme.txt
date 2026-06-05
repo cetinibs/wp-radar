@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.2.1
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,22 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.3.0 =
+* VirusTotal entegrasyonu eklendi:
+  - API v3 ile URL ve dosya (SHA-256) itibar sorgusu; 70+ güvenlik motorunun
+    "zararlı / şüpheli / zararsız" sonuçları.
+  - Yönetim panelinde anlık "VirusTotal ile Tara" aracı (URL veya hash).
+  - Şüpheli upload dosyalarının otomatik VirusTotal doğrulaması (isteğe bağlı,
+    oran sınırı için çalışma başına en fazla 4 sorgu); zararlı çıkarsa kritik
+    olay olarak loglanır ve e-posta bildirimi tetikler.
+  - Sonuçlar 1 saat önbelleğe alınır (ücretsiz API sınırına saygı).
+* Yönetim paneli kullanıcı dostu hale getirildi:
+  - Üstte durum panosu (aktif modül sayısı, son 24 saat kritik/uyarı, VirusTotal
+    durumu, son tarama zamanı).
+  - Ayarlar mantıksal kartlara/gruplara ayrıldı (Giriş & Kullanıcı, Ağ & İstek,
+    Dosya & Sistem, Sertleştirme, İçerik, VirusTotal, Bildirim).
+  - Daha okunaklı geçiş anahtarları ve açıklamalar.
 
 = 2.2.1 =
 * Bildirim gruplaması IP bloğuna göre yapılır hale getirildi: tekrar-bildirim engeli

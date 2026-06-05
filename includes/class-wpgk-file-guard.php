@@ -222,6 +222,10 @@ class WPGK_File_Guard {
 		// Metin sayılan uzantılar (geniş imza güvenle uygulanabilir).
 		$metin_uzantilari = array( 'txt', 'html', 'htm', 'xml', 'js', 'css', 'svg', 'json', 'csv', 'md', 'ini', 'log', 'xhtml' );
 
+		// VirusTotal otomatik doğrulama (oran sınırı: bu çalışmada en fazla 4 sorgu).
+		$vt_otomatik = ! empty( $ayarlar['vt_otomatik'] ) && class_exists( 'WPGK_VirusTotal' ) && WPGK_VirusTotal::aktif();
+		$vt_kalan    = 4;
+
 		foreach ( $iter as $dosya ) {
 			if ( ! $dosya->isFile() ) {
 				continue;
@@ -238,6 +242,10 @@ class WPGK_File_Guard {
 			// 1) Gerçek script uzantıları → çalıştırılabilir dosya (kritik).
 			if ( in_array( $uzanti, $script_uzantilari, true ) ) {
 				WPGK_Logger::kaydet( 'dosya', 'uploads_php_tespit', 'uploads içinde çalıştırılabilir dosya: ' . $yol, 'kritik' );
+				if ( $vt_otomatik && $vt_kalan > 0 ) {
+					$vt_kalan--;
+					WPGK_VirusTotal::dosyayi_dogrula( $yol );
+				}
 				continue;
 			}
 
@@ -258,6 +266,10 @@ class WPGK_File_Guard {
 					$regex = in_array( $uzanti, $metin_uzantilari, true ) ? $imza_metin : $imza_ikili;
 					if ( preg_match( $regex, $ornek ) ) {
 						WPGK_Logger::kaydet( 'dosya', 'uploads_shell_imza', 'uploads içinde şüpheli kod imzası: ' . $yol, 'kritik' );
+						if ( $vt_otomatik && $vt_kalan > 0 ) {
+							$vt_kalan--;
+							WPGK_VirusTotal::dosyayi_dogrula( $yol );
+						}
 					}
 				}
 			}
