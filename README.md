@@ -1,4 +1,4 @@
-﻿# WP Radar
+# WP Radar
 
 **Comprehensive security radar for WordPress** — brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, server hardening, and instant email alerts for critical events.
 
