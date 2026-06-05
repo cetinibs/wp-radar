@@ -1,0 +1,13 @@
+﻿# Paketler
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Bağımlılık / araç
+/vendor/
+/node_modules/
