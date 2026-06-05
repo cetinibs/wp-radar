@@ -1,48 +1,69 @@
 ﻿# WP Radar
 
-Kapsamlı WordPress güvenlik radarı: brute-force / giriş koruması, sızma (exploit) engelleme, zararlı dosya & klasör tespiti, çekirdek bütünlüğü doğrulama, güvenlik sertleştirmesi ve kritik olaylarda anlık e-posta bildirimi.
+**Comprehensive security radar for WordPress** — brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, server hardening, and instant email alerts for critical events.
 
-> Sürüm: **2.2.1** · Gereksinim: WordPress 5.0+ / PHP 7.0+ · Lisans: GPL-2.0-or-later
+<p>
+  <img alt="Version" src="https://img.shields.io/badge/version-2.2.1-blue.svg">
+  <img alt="WordPress" src="https://img.shields.io/badge/WordPress-5.0%2B-21759b.svg">
+  <img alt="PHP" src="https://img.shields.io/badge/PHP-7.0%2B-777bb4.svg">
+  <img alt="License" src="https://img.shields.io/badge/license-GPL--2.0--or--later-green.svg">
+</p>
 
-## Özellikler
+---
 
-### Kullanıcı & Giriş güvenliği
-- Yetkisiz yönetici oluşturma / rol yükseltme engelleme (güvenilir admin listesi)
-- Brute-force koruması: IP bazlı oran sınırlama ve geçici kilitleme
-- Kullanıcı adı sızdırmayan jenerik giriş hataları
+## Overview
 
-### Ağ & İstek güvenliği
-- Exploit imza taraması (path traversal, LFI/RFI, SQLi, web shell, XSS)
-- Kötü bot / tarama aracı engelleme (sqlmap, nikto, wpscan, nmap vb.)
-- XML-RPC sertleştirme: pingback / `system.multicall` kaldırma, X-Pingback gizleme, isteğe bağlı tam engelleme
-- Kullanıcı adı enumerasyonu engeli (`?author=N`, REST users, sitemap users)
-- Güvenlik HTTP başlıkları (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) ve HSTS
+WP Radar is a defensive, all-in-one security plugin that hardens a WordPress site against the most common real-world attacks: automated login brute-forcing, vulnerability probing, malicious file uploads, SEO-spam injection, and unauthorized privilege escalation. It runs as an early-stage request filter combined with scheduled file and integrity scans, and notifies administrators the moment a critical event is detected.
 
-### Dosya & Sistem güvenliği
-- uploads / kök dizinde web shell ve çalıştırılabilir dosya tespiti (yanlış pozitif azaltılmış)
-- Kök dizinde SEO spam / doorway klasörü tespiti ve kanıta dayalı otomatik temizleme
-- Çekirdek dosya bütünlüğü doğrulama (WordPress.org checksums)
-- Panel içi dosya düzenleyiciyi kapatma (DISALLOW_FILE_EDIT), hassas dosya ve dizin listeleme koruması (.htaccess)
+## Features
 
-### İçerik güvenliği
-- Ön yüzde spam / zararlı bağlantı temizleme, kara liste domain desteği
+### Authentication & login security
+- Blocks unauthorized administrator creation and role escalation via a trusted-admin allowlist
+- Brute-force protection with per-IP rate limiting and temporary lockouts
+- Generic login errors that prevent username enumeration
 
-### Bildirimler
-- Kritik olaylarda anlık e-posta bildirimi
-- Çoklu alıcı desteği
-- "Olay türü + IP bloğu (/24)" bazlı tekrar-bildirim engeli (e-posta yağmuru önleme)
-- Tek tıkla test e-postası
+### Network & request security
+- Request-signature firewall for path traversal, LFI/RFI, SQL injection, web shells, and XSS
+- Bad-bot and scanner blocking (sqlmap, Nikto, WPScan, Nmap, and more)
+- XML-RPC hardening: removes pingback / `system.multicall` methods, strips the `X-Pingback` header, with an optional full block
+- Username-enumeration protection across `?author=N`, the REST users endpoint, and the users sitemap
+- Security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) and optional HSTS with preload
 
-## Kurulum
+### File & system security
+- Detects web shells and executable files in `uploads/` and the web root, with tuned, low-false-positive heuristics
+- Identifies and (evidence-based) auto-removes SEO-spam / doorway folders in the document root
+- Core file-integrity verification against official WordPress.org checksums
+- Disables the in-dashboard file editor (`DISALLOW_FILE_EDIT`), protects sensitive files, and prevents directory listing via `.htaccess`
 
-1. Bu depoyu ZIP olarak indirin ya da `wp-radar` klasörünü `wp-content/plugins/` altına kopyalayın.
-2. WordPress yönetim panelinde **Eklentiler** > **WP Radar**'ı etkinleştirin.
-3. **WP Radar** menüsünden ayarları yapılandırın ve bildirim e-postalarını girin.
+### Content security
+- Cleans spam and malicious links on the front end, with a configurable domain blacklist
 
-## Güvenlik notu
+### Notifications
+- Instant email alerts on critical events
+- Multiple recipients
+- De-duplicated alerts grouped by event type and attacker IP block (/24) to prevent inbox flooding during an attack
+- One-click test email to verify delivery
 
-Bu eklenti savunmaya yönelik (defensive) bir güvenlik aracıdır. Sorumlu kullanım içindir.
+## Installation
 
-## Sürüm geçmişi
+1. Download this repository as a ZIP, or copy the `wp-radar` directory into `wp-content/plugins/`.
+2. In the WordPress dashboard, go to **Plugins** and activate **WP Radar**.
+3. Open the **WP Radar** menu to configure protection modules and notification recipients.
 
-Ayrıntılı değişiklikler için `readme.txt` dosyasındaki "Sürüm Geçmişi" bölümüne bakın.
+> **Email delivery on shared hosting:** WordPress `wp_mail()` is often unreliable on shared hosts. If the test email does not arrive, configure an SMTP plugin (for example, *WP Mail SMTP*).
+
+## Configuration
+
+All modules are managed from the **WP Radar** admin page. Key settings include the login lockout threshold and duration, the trusted-administrator list, the malicious-domain blacklist, security headers / HSTS, XML-RPC handling, notification recipients, and the repeat-alert throttle window.
+
+## Changelog
+
+See the **Changelog** section in [`readme.txt`](readme.txt) for detailed, version-by-version release notes.
+
+## Security
+
+WP Radar is a defensive security tool intended for protecting sites you own or are authorized to manage. If you discover a vulnerability in the plugin itself, please report it privately to the maintainer rather than opening a public issue.
+
+## License
+
+Distributed under the **GPL-2.0-or-later** license. See [`LICENSE`](LICENSE) for details.
