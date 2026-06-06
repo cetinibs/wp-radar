@@ -3,7 +3,7 @@
  * Plugin Name:       WP Radar
  * Plugin URI:        https://example.com/wp-radar
  * Description:        Kapsamlı WordPress güvenlik radarı: brute-force/giriş koruması, güvenlik başlıkları ve sertleştirme, çekirdek dosya bütünlüğü, eklenti/tema açığı sızma engeli, yetkisiz kullanıcı/kök klasör tespiti ve zararlı link/SEO spam temizliği.
- * Version:           2.3.0
+ * Version:           2.3.1
  * Requires at least: 5.0
  * Requires PHP:      7.0
  * Author:            WP Radar
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Doğrudan erişim engellendi.
 }
 
-define( 'WPGK_VERSION', '2.3.0' );
+define( 'WPGK_VERSION', '2.3.1' );
 define( 'WPGK_FILE', __FILE__ );
 define( 'WPGK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPGK_URL', plugin_dir_url( __FILE__ ) );

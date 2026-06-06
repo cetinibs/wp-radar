@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.3.0
+Stable tag: 2.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,25 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.3.1 =
+* Yanlış pozitif (false-positive) azaltma — gerçek saha verilerine göre ayarlandı:
+  - uploads içi `index.php` guard dosyaları: eklentilerin (WPForms, WooCommerce,
+    Elementor vb.) bıraktığı zararsız ABSPATH-kontrollü `index.php` dosyaları artık
+    "çalıştırılabilir dosya" olarak işaretlenmiyor (boyut sınırı 256 → 2048 bayt).
+  - Görsel/ikili dosya imza taraması: bir görselin (`.jpg` vb.) ikili verisinde
+    tesadüfen oluşabilen kısa `<?=` etiketi tek başına alarm üretmiyor; artık gerçek
+    polyglot shell için HEM PHP açılış etiketi HEM de tehlikeli bir çağrı
+    (`eval`/`base64_decode`/`system`/`$_REQUEST` vb.) birlikte aranıyor.
+  - Kötü bot tespiti: user-agent kalıbındaki `x?spider` → `xspider`. Bytespider,
+    Baiduspider, Sogou Spider, 360Spider gibi MEŞRU tarayıcılar artık "saldırı aracı"
+    sayılmıyor; yalnızca gerçek XSpider zafiyet tarayıcısı engelleniyor.
+* Dosya bütünlük denetimi akıllandırıldı:
+  - Değişen `.htaccess` / `wp-config.php` gibi dosyalar körlemesine "kritik"
+    işaretlenmiyor; içerik analiziyle yalnızca PHP çalıştırmayı etkinleştiren direktif
+    veya web shell/gizlenmiş kod imzası bulunursa kritik, aksi halde "uyari" loglanıyor.
+  - Baseline (temel hash) bir değişiklik raporlandıktan sonra kendini yeniliyor; aynı
+    meşru değişiklik için her taramada tekrar e-posta gönderilmiyor.
 
 = 2.3.0 =
 * VirusTotal entegrasyonu eklendi:

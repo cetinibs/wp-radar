@@ -3,7 +3,7 @@
 **Comprehensive security radar for WordPress** — brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, VirusTotal reputation checks, server hardening, and instant email alerts for critical events.
 
 <p>
-  <img alt="Version" src="https://img.shields.io/badge/version-2.3.0-blue.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-2.3.1-blue.svg">
   <img alt="WordPress" src="https://img.shields.io/badge/WordPress-5.0%2B-21759b.svg">
   <img alt="PHP" src="https://img.shields.io/badge/PHP-7.0%2B-777bb4.svg">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--2.0--or--later-green.svg">
@@ -14,6 +14,8 @@
 ## Overview
 
 WP Radar is a defensive, all-in-one security plugin that hardens a WordPress site against the most common real-world attacks: automated login brute-forcing, vulnerability probing, malicious file uploads, SEO-spam injection, and unauthorized privilege escalation. It runs as an early-stage request filter combined with scheduled file and integrity scans, optional VirusTotal reputation lookups, and notifies administrators the moment a critical event is detected.
+
+> **Production status:** WP Radar has been tested across 20 live WordPress sites and is currently deployed and running in production. During these deployments it has detected and resolved a large number of real-world security vulnerabilities.
 
 ## Features
 

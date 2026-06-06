@@ -171,16 +171,34 @@ class WPGK_File_Guard {
 			return;
 		}
 
-		$baseline = get_option( self::BASELINE_OPSIYON, array() );
+		$baseline    = get_option( self::BASELINE_OPSIYON, array() );
+		$guncellendi = false;
 		foreach ( $baseline as $yol => $eski_hash ) {
 			if ( ! is_readable( $yol ) ) {
 				WPGK_Logger::kaydet( 'dosya', 'kritik_dosya_silindi', 'Kritik dosya kayıp: ' . $yol, 'kritik' );
 				continue;
 			}
 			$yeni = md5_file( $yol );
-			if ( $yeni !== $eski_hash ) {
-				WPGK_Logger::kaydet( 'dosya', 'kritik_dosya_degisti', 'Kritik dosya değiştirildi: ' . $yol, 'kritik' );
+			if ( $yeni === $eski_hash ) {
+				continue;
 			}
+
+			// Değişiklik var: içerik analiziyle ZARARLI mı yoksa MEŞRU güncelleme mi
+			// (permalink/eklenti/WP yeniden yazması) olduğuna karar ver. .htaccess ve
+			// wp-config.php meşru olarak sık değişir; körlemesine "kritik" demek gürültü üretir.
+			$neden = self::degisiklik_zararli_mi( $yol );
+			if ( '' !== $neden ) {
+				WPGK_Logger::kaydet( 'dosya', 'kritik_dosya_degisti', 'Kritik dosyada ŞÜPHELİ değişiklik: ' . $yol . ' — ' . $neden, 'kritik' );
+			} else {
+				WPGK_Logger::kaydet( 'dosya', 'kritik_dosya_guncellendi', 'Kritik dosya değişti (zararlı içerik bulunamadı; muhtemelen meşru güncelleme): ' . $yol, 'uyari' );
+			}
+
+			// Temeli yenile: aynı değişiklik için her taramada tekrar alarm üretme.
+			$baseline[ $yol ] = $yeni;
+			$guncellendi      = true;
+		}
+		if ( $guncellendi ) {
+			update_option( self::BASELINE_OPSIYON, $baseline );
 		}
 
 		// Root dizininde beklenmeyen yeni .php dosyaları (sızma kalıcılığı).
@@ -192,6 +210,37 @@ class WPGK_File_Guard {
 				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde beklenmeyen PHP dosyası: ' . $ad, 'kritik' );
 			}
 		}
+	}
+
+	/**
+	 * Değişen bir baseline dosyasının içeriğini inceleyerek zararlı olup olmadığına
+	 * karar verir. .htaccess için PHP çalıştırmayı etkinleştiren/kod içeren
+	 * direktifleri, PHP dosyaları için web shell / gizlenmiş kod imzalarını arar.
+	 *
+	 * @return string Zararlı işaret bulunursa neden metni; aksi halde boş string.
+	 */
+	protected static function degisiklik_zararli_mi( $yol ) {
+		$ad     = strtolower( basename( $yol ) );
+		$icerik = @file_get_contents( $yol, false, null, 0, 65536 );
+		if ( false === $icerik || '' === $icerik ) {
+			return '';
+		}
+
+		// .htaccess: yalnızca PHP çalıştırmayı (yeniden) etkinleştiren ya da
+		// doğrudan kod/gizleme içeren direktifler tehlikelidir. Sıradan
+		// RewriteRule/permalink kuralları meşrudur.
+		if ( '.htaccess' === $ad ) {
+			if ( preg_match( '/(AddHandler|SetHandler|AddType)[^\r\n]*(php|x-httpd)|php_(value|flag|admin_value|admin_flag)|auto_(prepend|append)_file|application\/x-httpd-php|<\?php|<\?=|base64_decode\s*\(/i', $icerik ) ) {
+				return 'PHP çalıştırmayı etkinleştiren veya kod içeren .htaccess direktifi';
+			}
+			return '';
+		}
+
+		// PHP / diğer dosyalar: web shell ve gizlenmiş kod imzaları.
+		if ( preg_match( '/eval\s*\(\s*\$|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|gzuncompress\s*\(|assert\s*\(\s*\$|shell_exec\s*\(|system\s*\(|passthru\s*\(|create_function\s*\(|preg_replace\s*\(\s*["\'].*\/e/i', $icerik ) ) {
+			return 'gizlenmiş kod / web shell imzası';
+		}
+		return '';
 	}
 
 	/**
@@ -217,8 +266,11 @@ class WPGK_File_Guard {
 
 		// Metin dosyaları için geniş shell imzası.
 		$imza_metin = '/<\?php|<\?=|eval\s*\(\s*\$|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|assert\s*\(\s*\$|system\s*\(|shell_exec\s*\(/i';
-		// İkili/görsel dosyalar için yalnızca gerçek PHP açılış etiketi (polyglot). İkili veride tesadüfen oluşmaz.
-		$imza_ikili = '/<\?php|<\?=/';
+		// İkili/görsel dosyalar (jpg, png, gif vb.): kısa "<?=" etiketi (3 bayt) ikili
+		// görüntü verisinde TESADÜFEN oluşabilir; tek başına imza değildir. Gerçek
+		// polyglot shell HEM bir PHP açılış etiketi HEM de tehlikeli bir çağrı taşır.
+		$imza_ikili_etiket = '/<\?php|<\?=/';
+		$imza_ikili_yuk    = '/eval\s*\(|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|gzuncompress\s*\(|assert\s*\(|shell_exec\s*\(|system\s*\(|passthru\s*\(|\$_(GET|POST|REQUEST|COOKIE|SERVER)/i';
 		// Metin sayılan uzantılar (geniş imza güvenle uygulanabilir).
 		$metin_uzantilari = array( 'txt', 'html', 'htm', 'xml', 'js', 'css', 'svg', 'json', 'csv', 'md', 'ini', 'log', 'xhtml' );
 
@@ -263,8 +315,16 @@ class WPGK_File_Guard {
 			if ( $dosya->getSize() > 0 && $dosya->getSize() < 2097152 ) {
 				$ornek = file_get_contents( $yol, false, null, 0, 8192 );
 				if ( false !== $ornek ) {
-					$regex = in_array( $uzanti, $metin_uzantilari, true ) ? $imza_metin : $imza_ikili;
-					if ( preg_match( $regex, $ornek ) ) {
+					if ( in_array( $uzanti, $metin_uzantilari, true ) ) {
+						// Metin dosyaları: geniş imza güvenle uygulanabilir.
+						$supheli = (bool) preg_match( $imza_metin, $ornek );
+					} else {
+						// İkili/görsel dosyalar: yanlış pozitifi önlemek için HEM PHP
+						// açılış etiketi HEM de tehlikeli bir çağrı bulunmalı.
+						$supheli = preg_match( $imza_ikili_etiket, $ornek )
+							&& preg_match( $imza_ikili_yuk, $ornek );
+					}
+					if ( $supheli ) {
 						WPGK_Logger::kaydet( 'dosya', 'uploads_shell_imza', 'uploads içinde şüpheli kod imzası: ' . $yol, 'kritik' );
 						if ( $vt_otomatik && $vt_kalan > 0 ) {
 							$vt_kalan--;
@@ -284,8 +344,10 @@ class WPGK_File_Guard {
 	 * @return bool Dosya benign bir koruma dosyasıysa true.
 	 */
 	protected static function guvenli_koruma_dosyasi( $dosya, $uzanti, $ad ) {
-		if ( 'php' === $uzanti && 'index.php' === $ad && $dosya->getSize() <= 256 ) {
-			$icerik = @file_get_contents( $dosya->getPathname(), false, null, 0, 256 );
+		// Boyut sınırı 2 KB: WPForms, WooCommerce, Elementor vb. eklentiler ABSPATH
+		// kontrolü içeren daha uzun (ama zararsız) guard index.php dosyaları bırakır.
+		if ( 'php' === $uzanti && 'index.php' === $ad && $dosya->getSize() <= 2048 ) {
+			$icerik = @file_get_contents( $dosya->getPathname(), false, null, 0, 2048 );
 			if ( false !== $icerik
 				&& ! preg_match( '/eval\s*\(|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|shell_exec\s*\(|system\s*\(|passthru\s*\(|assert\s*\(|\$_(GET|POST|REQUEST|COOKIE|SERVER)/i', $icerik ) ) {
 				return true; // İçinde tehlikeli kod yok → boş guard dosyası.
