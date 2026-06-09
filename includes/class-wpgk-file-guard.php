@@ -226,13 +226,32 @@ class WPGK_File_Guard {
 			return '';
 		}
 
-		// .htaccess: yalnızca PHP çalıştırmayı (yeniden) etkinleştiren ya da
-		// doğrudan kod/gizleme içeren direktifler tehlikelidir. Sıradan
-		// RewriteRule/permalink kuralları meşrudur.
+		// .htaccess: yanlış pozitifi önlemek için yalnızca GERÇEK tehlikeler kritik
+		// sayılır. Standart PHP sürüm handler'ı (AddHandler ... .php .phtml) ve
+		// php_value/php_flag gibi direktifler paylaşımlı hostingde (Hostinger/cPanel)
+		// olağandır ve TEK BAŞINA zararlı değildir.
 		if ( '.htaccess' === $ad ) {
-			if ( preg_match( '/(AddHandler|SetHandler|AddType)[^\r\n]*(php|x-httpd)|php_(value|flag|admin_value|admin_flag)|auto_(prepend|append)_file|application\/x-httpd-php|<\?php|<\?=|base64_decode\s*\(/i', $icerik ) ) {
-				return 'PHP çalıştırmayı etkinleştiren veya kod içeren .htaccess direktifi';
+			// 1) Doğrudan PHP kodu veya gizleme → kesinlikle zararlı.
+			if ( preg_match( '/<\?php|<\?=|eval\s*\(|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|gzuncompress\s*\(|assert\s*\(|shell_exec\s*\(|system\s*\(|passthru\s*\(|create_function\s*\(/i', $icerik ) ) {
+				return 'kod / gizlenmiş içerik';
 			}
+			// 2) auto_prepend_file / auto_append_file → her isteğe dosya enjekte eden
+			//    kalıcılık (persistence) tekniği.
+			if ( preg_match( '/auto_(prepend|append)_file/i', $icerik ) ) {
+				return 'auto_prepend/append_file enjeksiyonu';
+			}
+			// 3) PHP yürütmeyi PHP-OLMAYAN bir uzantıya açan handler/type satırı
+			//    (gizlenmiş .jpg/.png shell'lerini çalıştırma). Satır bazında bakılır;
+			//    yalnızca .php/.phtml/.php7 hedefleyen meşru handler'lar yakalanmaz.
+			$gizli_uzanti = '/\.(jpg|jpeg|png|gif|bmp|ico|svg|webp|txt|html?|pdf|zip|csv|xml|json|css|js)\b/i';
+			foreach ( preg_split( '/\r\n|\r|\n/', $icerik ) as $satir ) {
+				if ( preg_match( '/(AddHandler|AddType|SetHandler)/i', $satir )
+					&& preg_match( '/x-httpd-php|application\/x-httpd|php\d?\b/i', $satir )
+					&& preg_match( $gizli_uzanti, $satir ) ) {
+					return 'PHP yürütmeyi PHP-olmayan uzantıya açan handler';
+				}
+			}
+			// Aksi halde (standart PHP sürüm bloğu, php_value, rewrite kuralları) → meşru.
 			return '';
 		}
 

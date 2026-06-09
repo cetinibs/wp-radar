@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.3.2
+Stable tag: 2.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,19 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.3.3 =
+* .htaccess bütünlük denetiminde yanlış pozitif düzeltmesi:
+  - Paylaşımlı hostingde (Hostinger/cPanel) olağan olan PHP sürüm handler'ı
+    (`AddHandler ... .php .phtml`) ve `php_value`/`php_flag` direktifleri artık TEK
+    BAŞINA "şüpheli değişiklik" sayılmıyor; bu direktifler meşrudur.
+  - .htaccess artık yalnızca gerçek tehlikelerde kritik işaretleniyor:
+    (a) doğrudan PHP kodu/gizleme (`<?php`, `eval(`, `base64_decode(` …),
+    (b) `auto_prepend_file`/`auto_append_file` enjeksiyonu,
+    (c) PHP yürütmeyi PHP-olmayan bir uzantıya (.jpg, .png, .txt …) açan
+        AddHandler/AddType/SetHandler satırı.
+  - Böylece PHP sürümü değiştirildiğinde veya bir eklenti php_value eklediğinde
+    gereksiz "kritik" e-posta gönderilmiyor; değişiklik "uyari" olarak loglanıyor.
 
 = 2.3.2 =
 * Web shell tarama denemelerinde akıllı bildirim:
