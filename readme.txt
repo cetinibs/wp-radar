@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.3.1
+Stable tag: 2.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,18 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.3.2 =
+* Web shell tarama denemelerinde akıllı bildirim:
+  - Bilinen bir web shell DOSYA ADINA (c99, r57, wso, b374k, filesman, phpspy)
+    yapılan istek artık her zaman olduğu gibi 403 ile ENGELLENİR; ancak bildirim
+    seviyesi dosyanın sunucuda gerçekten var olup olmadığına göre belirlenir:
+    - Dosya sunucuda YOKSA (rutin internet taraması) → "uyari" loglanır, e-posta
+      GÖNDERİLMEZ. Böylece gece boyu süren bot taramaları için gereksiz uyarı gelmez.
+    - Dosya sunucuda VARSA → "kritik" loglanır, e-posta gönderilir ve (VirusTotal
+      açıksa) dosya otomatik olarak VirusTotal ile doğrulanır.
+  - Gerçek kod enjeksiyonu (ör. eval($_POST...)) bu istisnadan etkilenmez; her zaman
+    kritik kabul edilir.
 
 = 2.3.1 =
 * Yanlış pozitif (false-positive) azaltma — gerçek saha verilerine göre ayarlandı:
