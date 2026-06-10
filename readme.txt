@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.4.0
+Stable tag: 2.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,24 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.5.0 =
+* Wordfence benzeri yeni koruma modülleri (hepsi varsayılan kapalı / opt-in):
+  - İki faktörlü doğrulama (2FA / TOTP): Google Authenticator vb. ile uyumlu,
+    tamamen yerel (dış servis yok). Kullanıcı bazında "2FA Kurulumu" sayfasından
+    etkinleştirilir.
+  - Giriş CAPTCHA'sı: dış servis gerektirmeyen matematik sorusu.
+  - Elle IP kara/beyaz liste (CIDR destekli): beyaz liste tüm engelleri atlar,
+    kara liste erişimi tamamen reddeder.
+  - Oran sınırlama (rate limiting): IP başına istek/pencere eşiği aşılırsa geçici
+    engel; yöneticiler ve beyaz liste muaf.
+  - Ülke engelleme (GeoIP): yapılandırılabilir sağlayıcı (ip-api anahtarsız /
+    ipinfo token), IP başına önbellek, servis kesintisinde fail-open.
+  - Zafiyet taraması (WPScan API): kurulu eklenti/tema/çekirdek sürümlerini bilinen
+    açıklarla karşılaştırır; token gerektirir, açık bulunursa kritik + e-posta.
+* Not: Wordfence'in gerçek zamanlı tehdit istihbaratı (lisanslı IP/firewall/malware
+  feed'leri) bir altyapı hizmeti olduğundan birebir taklit edilmez; bu modüller
+  kendi kodunuzla veya sizin sağladığınız anahtarlarla çalışır.
 
 = 2.4.0 =
 * Uçtan uca güvenlik incelemesi sonucu sertleştirmeler:

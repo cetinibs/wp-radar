@@ -160,6 +160,11 @@ class WPGK_Admin {
 			80
 		);
 		add_submenu_page( 'wpgk-panel', 'Olay Günlüğü', 'Olay Günlüğü', 'manage_options', 'wpgk-gunluk', array( $this, 'gunluk_render' ) );
+		// 2FA kurulumu: her oturum açmış kullanıcı kendi hesabı için yapabilir.
+		$ls = WPGK_Plugin::instance()->login_security;
+		if ( $ls ) {
+			add_submenu_page( 'wpgk-panel', 'İki Faktörlü Doğrulama', '2FA Kurulumu', 'read', 'wpgk-2fa', array( $ls, 'sayfa_render' ) );
+		}
 	}
 
 	/**
@@ -199,6 +204,24 @@ class WPGK_Admin {
 			'vt_otomatik'           => isset( $_POST['vt_otomatik'] ) ? 1 : 0,
 			// IP kaynağı (proxy/CDN güveni).
 			'proxy_guven'           => isset( $_POST['proxy_guven'] ) ? 1 : 0,
+			// Giriş güvenliği
+			'giris_2fa'             => isset( $_POST['giris_2fa'] ) ? 1 : 0,
+			'giris_captcha'         => isset( $_POST['giris_captcha'] ) ? 1 : 0,
+			'ip_kara_liste'         => isset( $_POST['ip_kara_liste'] ) ? sanitize_textarea_field( wp_unslash( $_POST['ip_kara_liste'] ) ) : '',
+			'ip_beyaz_liste'        => isset( $_POST['ip_beyaz_liste'] ) ? sanitize_textarea_field( wp_unslash( $_POST['ip_beyaz_liste'] ) ) : '',
+			// Oran sınırlama
+			'oran_limit'            => isset( $_POST['oran_limit'] ) ? 1 : 0,
+			'oran_max'              => isset( $_POST['oran_max'] ) ? max( 10, min( 100000, (int) $_POST['oran_max'] ) ) : 120,
+			'oran_pencere_sn'       => isset( $_POST['oran_pencere_sn'] ) ? max( 10, min( 3600, (int) $_POST['oran_pencere_sn'] ) ) : 60,
+			'oran_kilit_dk'         => isset( $_POST['oran_kilit_dk'] ) ? max( 1, min( 1440, (int) $_POST['oran_kilit_dk'] ) ) : 10,
+			// Ülke engelleme (GeoIP)
+			'ulke_engel'            => isset( $_POST['ulke_engel'] ) ? 1 : 0,
+			'engelli_ulkeler'       => isset( $_POST['engelli_ulkeler'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['engelli_ulkeler'] ) ) ) : '',
+			'geoip_saglayici'       => ( isset( $_POST['geoip_saglayici'] ) && 'ipinfo' === $_POST['geoip_saglayici'] ) ? 'ipinfo' : 'ip-api',
+			'geoip_token'           => isset( $_POST['geoip_token'] ) ? sanitize_text_field( wp_unslash( $_POST['geoip_token'] ) ) : '',
+			// Zafiyet taraması (WPScan)
+			'vuln_tarama'           => isset( $_POST['vuln_tarama'] ) ? 1 : 0,
+			'wpscan_token'          => isset( $_POST['wpscan_token'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['wpscan_token'] ) ) : '',
 			// Giriş / brute-force
 			'giris_korumasi'        => isset( $_POST['giris_korumasi'] ) ? 1 : 0,
 			'giris_jenerik_hata'    => isset( $_POST['giris_jenerik_hata'] ) ? 1 : 0,
@@ -436,6 +459,80 @@ class WPGK_Admin {
 						<input type="checkbox" name="vt_otomatik" value="1" <?php checked( ! empty( $ayarlar['vt_otomatik'] ) ); ?> />
 						<span>Otomatik doğrulama: uploads taramasında bulunan şüpheli dosyaların SHA-256 özetini VirusTotal ile doğrula (çalışma başına en fazla 4 sorgu).</span>
 					</label>
+				</div>
+
+				<!-- GİRİŞ GÜVENLİĞİ (2FA / CAPTCHA / IP) -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-lock" style="vertical-align:-3px;"></span> Giriş Güvenliği</h2>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="giris_2fa" value="1" <?php checked( ! empty( $ayarlar['giris_2fa'] ) ); ?> />
+						<span>İki faktörlü doğrulama (2FA / TOTP) etkin. Açtıktan sonra her kullanıcı <a href="<?php echo esc_url( admin_url( 'admin.php?page=wpgk-2fa' ) ); ?>">2FA Kurulumu</a> sayfasından kendi hesabını korumalı (Google Authenticator vb.).</span>
+					</label>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="giris_captcha" value="1" <?php checked( ! empty( $ayarlar['giris_captcha'] ) ); ?> />
+						<span>Giriş formunda CAPTCHA (basit matematik sorusu) — otomatik giriş botlarını yavaşlatır.</span>
+					</label>
+					<div style="padding:12px 0 6px;">
+						<strong>IP beyaz listesi (engelleri atlar):</strong>
+						<textarea name="ip_beyaz_liste" rows="2" class="large-text" placeholder="Her satıra bir IP veya CIDR (ör. 203.0.113.5 veya 203.0.113.0/24)"><?php echo esc_textarea( isset( $ayarlar['ip_beyaz_liste'] ) ? $ayarlar['ip_beyaz_liste'] : '' ); ?></textarea>
+						<p class="description">Buradaki IP'ler tüm WP Radar engellerinden muaftır (kendi IP'nizi eklemeniz önerilir — kazara kilitlenmeyi önler).</p>
+					</div>
+					<div style="padding:6px 0;">
+						<strong>IP kara listesi (tamamen engellenir):</strong>
+						<textarea name="ip_kara_liste" rows="2" class="large-text" placeholder="Her satıra bir IP veya CIDR"><?php echo esc_textarea( isset( $ayarlar['ip_kara_liste'] ) ? $ayarlar['ip_kara_liste'] : '' ); ?></textarea>
+						<p class="description">Bu IP/bloklardan gelen tüm istekler 403 ile reddedilir.</p>
+					</div>
+				</div>
+
+				<!-- ORAN SINIRLAMA -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-performance" style="vertical-align:-3px;"></span> Oran Sınırlama (Rate Limiting)</h2>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="oran_limit" value="1" <?php checked( ! empty( $ayarlar['oran_limit'] ) ); ?> />
+						<span>Tek IP'den gelen aşırı isteği frenle (agresif bot / kazıma / uygulama DoS). Yöneticiler ve beyaz listedeki IP'ler muaftır.</span>
+					</label>
+					<div style="padding:8px 0;">
+						<input type="number" name="oran_max" min="10" max="100000" value="<?php echo esc_attr( isset( $ayarlar['oran_max'] ) ? $ayarlar['oran_max'] : 120 ); ?>" class="small-text" /> istek /
+						<input type="number" name="oran_pencere_sn" min="10" max="3600" value="<?php echo esc_attr( isset( $ayarlar['oran_pencere_sn'] ) ? $ayarlar['oran_pencere_sn'] : 60 ); ?>" class="small-text" /> saniyeyi aşarsa,
+						<input type="number" name="oran_kilit_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['oran_kilit_dk'] ) ? $ayarlar['oran_kilit_dk'] : 10 ); ?>" class="small-text" /> dakika engelle.
+						<p class="description">Engellenen istekler Olay Günlüğü'ne (canlı trafik görünümü) yazılır. Çok düşük değerler meşru ziyaretçileri etkileyebilir.</p>
+					</div>
+				</div>
+
+				<!-- ÜLKE ENGELLEME (GEOIP) -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-admin-site" style="vertical-align:-3px;"></span> Ülke Engelleme (GeoIP)</h2>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="ulke_engel" value="1" <?php checked( ! empty( $ayarlar['ulke_engel'] ) ); ?> />
+						<span>Belirli ülkelerden erişimi engelle. Servis erişilemezse erişim engellenmez (fail-open).</span>
+					</label>
+					<div style="padding:8px 0;">
+						<strong>Engellenecek ülke kodları (ISO-2):</strong>
+						<input type="text" name="engelli_ulkeler" class="regular-text" value="<?php echo esc_attr( isset( $ayarlar['engelli_ulkeler'] ) ? $ayarlar['engelli_ulkeler'] : '' ); ?>" placeholder="ör. RU, CN, KP" />
+						<p class="description">Virgülle ayırın. Boşsa engelleme yapılmaz.</p>
+					</div>
+					<div style="padding:6px 0;">
+						<strong>GeoIP sağlayıcı:</strong>
+						<label style="margin-right:12px;"><input type="radio" name="geoip_saglayici" value="ip-api" <?php checked( 'ipinfo' !== ( isset( $ayarlar['geoip_saglayici'] ) ? $ayarlar['geoip_saglayici'] : 'ip-api' ) ); ?> /> ip-api (anahtarsız)</label>
+						<label><input type="radio" name="geoip_saglayici" value="ipinfo" <?php checked( 'ipinfo' === ( isset( $ayarlar['geoip_saglayici'] ) ? $ayarlar['geoip_saglayici'] : '' ) ); ?> /> ipinfo (token)</label>
+						<input type="text" name="geoip_token" class="regular-text" style="margin-left:8px;" value="<?php echo esc_attr( isset( $ayarlar['geoip_token'] ) ? $ayarlar['geoip_token'] : '' ); ?>" placeholder="ipinfo token (yalnızca ipinfo için)" />
+						<p class="description">ip-api ücretsiz/anahtarsızdır (ticari olmayan kullanım, HTTP). Yoğun ticari trafikte ipinfo (token, HTTPS) önerilir. Sonuçlar IP başına 12 saat önbelleğe alınır.</p>
+					</div>
+				</div>
+
+				<!-- ZAFİYET TARAMASI -->
+				<div class="wpgk-section">
+					<h2><span class="dashicons dashicons-search" style="vertical-align:-3px;"></span> Zafiyet Taraması (WPScan)</h2>
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="vuln_tarama" value="1" <?php checked( ! empty( $ayarlar['vuln_tarama'] ) ); ?> />
+						<span>Kurulu eklenti/tema/çekirdek sürümlerini bilinen güvenlik açıklarına karşı günlük tara. Açık bulunursa kritik olay + e-posta.</span>
+					</label>
+					<?php $ws_kayitli = ! empty( $ayarlar['wpscan_token'] ); ?>
+					<div style="padding:8px 0;">
+						<strong>WPScan API token:</strong>
+						<input type="password" name="wpscan_token" class="regular-text" autocomplete="off" value="<?php echo esc_attr( isset( $ayarlar['wpscan_token'] ) ? $ayarlar['wpscan_token'] : '' ); ?>" placeholder="<?php echo esc_attr( $ws_kayitli ? '•••• kayıtlı' : 'WPScan API token' ); ?>" />
+						<p class="description"><a href="https://wpscan.com/api" target="_blank" rel="noopener">wpscan.com/api</a> üzerinden ücretsiz token alın (~25 istek/gün). Token olmadan bu modül çalışmaz.</p>
+					</div>
 				</div>
 
 				<!-- BİLDİRİM -->

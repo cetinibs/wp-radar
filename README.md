@@ -1,9 +1,9 @@
 # WP Radar
 
-**Comprehensive security radar for WordPress** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, VirusTotal reputation checks, server hardening, and instant email alerts for critical events.
+**Comprehensive security radar for WordPress** ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, VirusTotal reputation checks, server hardening, and instant email alerts for critical events.
 
 <p>
-  <img alt="Version" src="https://img.shields.io/badge/version-2.4.0-blue.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-2.5.0-blue.svg">
   <img alt="WordPress" src="https://img.shields.io/badge/WordPress-5.0%2B-21759b.svg">
   <img alt="PHP" src="https://img.shields.io/badge/PHP-7.0%2B-777bb4.svg">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--2.0--or--later-green.svg">
@@ -23,6 +23,8 @@ WP Radar is a defensive, all-in-one security plugin that hardens a WordPress sit
 - Blocks unauthorized administrator creation and role escalation via a trusted-admin allowlist
 - Brute-force protection with per-IP rate limiting and temporary lockouts
 - Generic login errors that prevent username enumeration
+- Two-factor authentication (TOTP) compatible with Google Authenticator/Authy, fully local
+- Login CAPTCHA (no external service) and manual IP allowlist/blocklist (CIDR supported)
 
 ### Network & request security
 - Request-signature firewall for path traversal, LFI/RFI, SQL injection, web shells, and XSS
@@ -38,10 +40,17 @@ WP Radar is a defensive, all-in-one security plugin that hardens a WordPress sit
 - Disables the in-dashboard file editor (`DISALLOW_FILE_EDIT`), protects sensitive files, and prevents directory listing via `.htaccess`
 
 ### VirusTotal integration
-- On-demand URL and file (SHA-256) reputation lookups via the VirusTotal API v3 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â aggregated verdicts from 70+ security engines
+- On-demand URL and file (SHA-256) reputation lookups via the VirusTotal API v3 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â aggregated verdicts from 70+ security engines
 - Built-in "Scan with VirusTotal" tool in the admin panel (URL or hash)
 - Optional automatic verification of suspicious upload files during scans; a malicious verdict is logged as critical and triggers an email alert
 - Results cached for one hour to respect free-tier API limits
+
+### Rate limiting & access control
+- Per-IP request rate limiting with temporary blocks (admins and allowlisted IPs exempt)
+- Country blocking (GeoIP) via a configurable provider (ip-api keyless / ipinfo token), cached per IP, fail-open
+
+### Vulnerability scanning
+- Checks installed plugin/theme/core versions against known vulnerabilities via the WPScan API (token required); affected components are logged critical and emailed
 
 ### Content security
 - Cleans spam and malicious links on the front end, with a configurable domain blacklist

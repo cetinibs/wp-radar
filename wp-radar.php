@@ -3,7 +3,7 @@
  * Plugin Name:       WP Radar
  * Plugin URI:        https://example.com/wp-radar
  * Description:        Kapsamlı WordPress güvenlik radarı: brute-force/giriş koruması, güvenlik başlıkları ve sertleştirme, çekirdek dosya bütünlüğü, eklenti/tema açığı sızma engeli, yetkisiz kullanıcı/kök klasör tespiti ve zararlı link/SEO spam temizliği.
- * Version:           2.4.0
+ * Version:           2.5.0
  * Requires at least: 5.0
  * Requires PHP:      7.0
  * Author:            WP Radar
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Doğrudan erişim engellendi.
 }
 
-define( 'WPGK_VERSION', '2.4.0' );
+define( 'WPGK_VERSION', '2.5.0' );
 define( 'WPGK_FILE', __FILE__ );
 define( 'WPGK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPGK_URL', plugin_dir_url( __FILE__ ) );
@@ -25,6 +25,10 @@ define( 'WPGK_BASENAME', plugin_basename( __FILE__ ) );
 require_once WPGK_DIR . 'includes/class-wpgk-util.php';
 require_once WPGK_DIR . 'includes/class-wpgk-logger.php';
 require_once WPGK_DIR . 'includes/class-wpgk-virustotal.php';
+require_once WPGK_DIR . 'includes/class-wpgk-login-security.php';
+require_once WPGK_DIR . 'includes/class-wpgk-rate-limit.php';
+require_once WPGK_DIR . 'includes/class-wpgk-geoip.php';
+require_once WPGK_DIR . 'includes/class-wpgk-vuln-scan.php';
 require_once WPGK_DIR . 'includes/class-wpgk-user-guard.php';
 require_once WPGK_DIR . 'includes/class-wpgk-file-guard.php';
 require_once WPGK_DIR . 'includes/class-wpgk-content-guard.php';
@@ -77,6 +81,24 @@ function wpgk_varsayilan_ayarlar() {
 		// IP kaynağı: 1 = proxy/CDN başlıklarına güven (XFF/CF), 0 = yalnızca REMOTE_ADDR.
 		// Site bir CDN/ters proxy ARKASINDA DEĞİLSE, sahtecilik koruması için 0 önerilir.
 		'proxy_guven'             => 1,
+		// Giriş güvenliği (2FA / CAPTCHA / IP listeleri) — varsayılan kapalı (opt-in).
+		'giris_2fa'               => 0,
+		'giris_captcha'           => 0,
+		'ip_kara_liste'           => '',
+		'ip_beyaz_liste'          => '',
+		// Oran sınırlama — varsayılan kapalı.
+		'oran_limit'              => 0,
+		'oran_max'                => 120,
+		'oran_pencere_sn'         => 60,
+		'oran_kilit_dk'           => 10,
+		// Ülke engelleme (GeoIP) — varsayılan kapalı.
+		'ulke_engel'              => 0,
+		'engelli_ulkeler'         => '',
+		'geoip_saglayici'         => 'ip-api',
+		'geoip_token'             => '',
+		// Zafiyet taraması (WPScan) — varsayılan kapalı.
+		'vuln_tarama'             => 0,
+		'wpscan_token'            => '',
 		// Sertleştirme
 		'guvenlik_basliklari'     => 1,
 		'hsts'                    => 0,
