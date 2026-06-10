@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.5.0
+Stable tag: 2.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,16 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.5.1 =
+* Ülke engellemeye "beyaz liste" modu eklendi: yalnızca seçili ülkelere izin verip
+  (ör. yalnızca TR) diğer tüm yurt dışı trafiği engelleyebilirsiniz. Türkiye içi
+  şüpheli trafik diğer modüller (firewall, oran sınırlama, bot/imza) tarafından
+  zaten ele alınır.
+* SEO koruması: doğrulanmış arama motoru botları (Googlebot, Bingbot, YandexBot vb.)
+  reverse/forward DNS ile doğrulanarak coğrafi engelden muaf tutulur — beyaz liste
+  modunda Google'ın siteyi taramaya devam etmesini sağlar. Sahte bot user-agent'ları
+  DNS teyidini geçemez.
 
 = 2.5.0 =
 * Wordfence benzeri yeni koruma modülleri (hepsi varsayılan kapalı / opt-in):

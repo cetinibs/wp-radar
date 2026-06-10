@@ -38,15 +38,42 @@ class WPGK_GeoIP {
 		return $liste;
 	}
 
+	/**
+	 * Yalnızca izin verilen ülke kodları (beyaz liste modu, ISO-2).
+	 */
+	protected static function izinli_ulkeler() {
+		$ayarlar = get_option( 'wpgk_ayarlar', array() );
+		$ham     = isset( $ayarlar['izinli_ulkeler'] ) ? (string) $ayarlar['izinli_ulkeler'] : '';
+		$liste   = array();
+		foreach ( preg_split( '/[\r\n,\s]+/', strtoupper( $ham ) ) as $k ) {
+			$k = trim( $k );
+			if ( preg_match( '/^[A-Z]{2}$/', $k ) ) {
+				$liste[] = $k;
+			}
+		}
+		return $liste;
+	}
+
 	public function denetle() {
 		$ayarlar = get_option( 'wpgk_ayarlar', array() );
 		if ( empty( $ayarlar['ulke_engel'] ) ) {
 			return;
 		}
-		$engelli = self::engelli_ulkeler();
-		if ( empty( $engelli ) ) {
-			return; // Yapılandırılmamış → hiçbir şey yapma.
+
+		$mod = ( isset( $ayarlar['ulke_mod'] ) && 'beyaz' === $ayarlar['ulke_mod'] ) ? 'beyaz' : 'kara';
+
+		if ( 'beyaz' === $mod ) {
+			$izinli = self::izinli_ulkeler();
+			if ( empty( $izinli ) ) {
+				return; // Yapılandırılmamış → hiçbir şey yapma (kazara tüm dünyayı engelleme).
+			}
+		} else {
+			$engelli = self::engelli_ulkeler();
+			if ( empty( $engelli ) ) {
+				return;
+			}
 		}
+
 		// Sistem / yönetici / beyaz liste muaf.
 		if ( ( defined( 'DOING_CRON' ) && DOING_CRON ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 			return;
@@ -63,16 +90,53 @@ class WPGK_GeoIP {
 		if ( '' === $ulke ) {
 			return; // Çözülemedi → fail-open.
 		}
-		if ( in_array( $ulke, $engelli, true ) ) {
-			WPGK_Logger::kaydet( 'geoip', 'ulke_engellendi', sprintf( 'Engelli ülkeden erişim reddedildi: %s (%s)', $ip, $ulke ), 'uyari' );
-			status_header( 403 );
-			nocache_headers();
-			wp_die(
-				esc_html__( 'Bu içeriğe bulunduğunuz bölgeden erişim kısıtlanmıştır.', 'wp-radar' ),
-				esc_html__( 'Erişim Engellendi', 'wp-radar' ),
-				array( 'response' => 403 )
-			);
+
+		$engelle = ( 'beyaz' === $mod ) ? ! in_array( $ulke, $izinli, true ) : in_array( $ulke, $engelli, true );
+		if ( ! $engelle ) {
+			return;
 		}
+
+		// SEO koruması: doğrulanmış arama motoru botlarını (Googlebot/Bingbot vb.)
+		// coğrafi engelden muaf tut (ayar açıksa). UA + reverse/forward DNS ile doğrulanır.
+		if ( ! empty( $ayarlar['ulke_arama_motoru_izin'] ) && self::dogrulanmis_arama_motoru( $ip ) ) {
+			return;
+		}
+
+		WPGK_Logger::kaydet( 'geoip', 'ulke_engellendi', sprintf( 'Coğrafi engel: %s (%s) — mod: %s', $ip, $ulke, $mod ), 'uyari' );
+		status_header( 403 );
+		nocache_headers();
+		wp_die(
+			esc_html__( 'Bu içeriğe bulunduğunuz bölgeden erişim kısıtlanmıştır.', 'wp-radar' ),
+			esc_html__( 'Erişim Engellendi', 'wp-radar' ),
+			array( 'response' => 403 )
+		);
+	}
+
+	/**
+	 * Bir IP'nin gerçek bir arama motoru botu olup olmadığını doğrular.
+	 * UA eşleşmesi + reverse DNS + (IPv4 için) forward DNS teyidi. Önbellekli.
+	 * Spooflanmış UA'lar reverse/forward DNS teyidini geçemez.
+	 */
+	protected static function dogrulanmis_arama_motoru( $ip ) {
+		$ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) : '';
+		if ( '' === $ua || ! preg_match( '/(googlebot|bingbot|slurp|duckduckbot|yandex(bot)?|applebot|baiduspider)/i', $ua ) ) {
+			return false;
+		}
+		$cache = get_transient( 'wpgk_bot_' . md5( $ip ) );
+		if ( false !== $cache ) {
+			return '1' === $cache;
+		}
+		$ok   = false;
+		$host = @gethostbyaddr( $ip );
+		if ( $host && preg_match( '/(\.googlebot\.com|\.google\.com|\.search\.msn\.com|\.crawl\.yahoo\.net|\.yandex\.(com|net|ru)|\.duckduckgo\.com|applebot\.apple\.com|\.crawl\.baidu\.com)$/i', $host ) ) {
+			if ( false !== strpos( $ip, ':' ) ) {
+				$ok = true; // IPv6: reverse eşleşmesi yeterli (forward IPv4 döndürür).
+			} else {
+				$ok = ( @gethostbyname( $host ) === $ip ); // IPv4: forward teyidi (anti-spoof).
+			}
+		}
+		set_transient( 'wpgk_bot_' . md5( $ip ), $ok ? '1' : '0', DAY_IN_SECONDS );
+		return $ok;
 	}
 
 	/**
