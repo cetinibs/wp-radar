@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.3.3
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,22 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.4.0 =
+* Uçtan uca güvenlik incelemesi sonucu sertleştirmeler:
+  - IP sahteciliğine karşı koruma: `X-Forwarded-For`/`CF-Connecting-IP` başlıkları
+    istemci tarafından sahte gönderilebildiğinden, bunlara koşulsuz güven kaldırıldı.
+    Yeni "proxy/CDN güveni" ayarı: kapalıyken yalnızca REMOTE_ADDR kullanılır
+    (sahtecilikle giriş-kilidi atlatma engellenir); açıkken CF-Connecting-IP ve
+    X-Forwarded-For içindeki ilk PUBLIC adres kullanılır (özel-aralık enjeksiyonu
+    atlanır). CDN/ters proxy arkasındaki siteler için varsayılan açıktır.
+  - Firewall imza atlatma düzeltmesi: istek URI'si artık imza taramasından önce
+    çok katlı (en çok 3 kez) URL-decode edilir; `..%252f` gibi çift kodlanmış
+    path-traversal/LFI payload'ları artık atlatamaz.
+  - VirusTotal API anahtarı yönetim panelinde maskelenir (HTML kaynağında açık
+    görünmez); boş bırakılıp kaydedilirse mevcut anahtar korunur, kaldırmak için
+    ayrı bir seçenek sunulur.
+  - Panel uyarı sayacındaki saat dilimi tutarsızlığı giderildi.
 
 = 2.3.3 =
 * .htaccess bütünlük denetiminde yanlış pozitif düzeltmesi:

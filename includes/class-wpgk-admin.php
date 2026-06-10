@@ -35,6 +35,22 @@ class WPGK_Admin {
 	}
 
 	/**
+	 * VirusTotal API anahtarını kaydeder. Alan maskelenmiş gösterildiğinden,
+	 * boş gönderildiyse mevcut kayıtlı anahtar korunur; doğrudan kaldırmak için
+	 * "wpgk_vt_temizle" işaretlenir.
+	 */
+	protected function vt_anahtar_kaydet() {
+		$mevcut = get_option( 'wpgk_ayarlar', array() );
+		$eski   = isset( $mevcut['vt_api_key'] ) ? (string) $mevcut['vt_api_key'] : '';
+
+		if ( isset( $_POST['wpgk_vt_temizle'] ) ) {
+			return '';
+		}
+		$girilen = isset( $_POST['vt_api_key'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['vt_api_key'] ) ) : '';
+		return ( '' !== $girilen ) ? $girilen : $eski;
+	}
+
+	/**
 	 * "Test e-postası gönder" butonu: kayıtlı alıcılara test bildirimi yollar.
 	 */
 	public function test_eposta_gonder() {
@@ -177,9 +193,12 @@ class WPGK_Admin {
 			'cekirdek_butunluk'     => isset( $_POST['cekirdek_butunluk'] ) ? 1 : 0,
 			'link_korumasi'         => isset( $_POST['link_korumasi'] ) ? 1 : 0,
 			'zararli_domainler'     => isset( $_POST['zararli_domainler'] ) ? sanitize_textarea_field( wp_unslash( $_POST['zararli_domainler'] ) ) : '',
-			// VirusTotal
-			'vt_api_key'            => isset( $_POST['vt_api_key'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['vt_api_key'] ) ) : '',
+			// VirusTotal — anahtar maskelenmiş gösterildiğinden, boş gönderilirse
+			// mevcut anahtar korunur (kazara silinmesini önler).
+			'vt_api_key'            => $this->vt_anahtar_kaydet(),
 			'vt_otomatik'           => isset( $_POST['vt_otomatik'] ) ? 1 : 0,
+			// IP kaynağı (proxy/CDN güveni).
+			'proxy_guven'           => isset( $_POST['proxy_guven'] ) ? 1 : 0,
 			// Giriş / brute-force
 			'giris_korumasi'        => isset( $_POST['giris_korumasi'] ) ? 1 : 0,
 			'giris_jenerik_hata'    => isset( $_POST['giris_jenerik_hata'] ) ? 1 : 0,
@@ -381,6 +400,10 @@ class WPGK_Admin {
 								<input type="number" name="giris_max_deneme" min="1" max="50" value="<?php echo esc_attr( isset( $ayarlar['giris_max_deneme'] ) ? $ayarlar['giris_max_deneme'] : 5 ); ?>" class="small-text" /> başarısız denemeden sonra
 								<input type="number" name="giris_kilit_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['giris_kilit_dk'] ) ? $ayarlar['giris_kilit_dk'] : 15 ); ?>" class="small-text" /> dakika kilitle.
 							</div>
+							<label class="wpgk-toggle">
+								<input type="checkbox" name="proxy_guven" value="1" <?php checked( ! empty( $ayarlar['proxy_guven'] ) ); ?> />
+								<span>IP kaynağı: proxy/CDN başlıklarına (X-Forwarded-For / CF-Connecting-IP) güven. <strong>Site bir CDN/ters proxy arkasındaysa açık tutun</strong> (Hostinger CDN, Cloudflare vb.). Doğrudan erişimli bir siteyse, IP sahteciliğiyle giriş-kilidi atlatmayı önlemek için <strong>kapatın</strong> (yalnızca REMOTE_ADDR kullanılır).</span>
+							</label>
 						<?php elseif ( 'Dosya & Sistem' === $baslik ) : ?>
 							<div style="padding:12px 0 6px;">
 								<strong>İzinli kök klasörler:</strong>
@@ -400,10 +423,14 @@ class WPGK_Admin {
 				<!-- VIRUSTOTAL AYARI -->
 				<div class="wpgk-section">
 					<h2><span class="dashicons dashicons-shield-alt" style="vertical-align:-3px;"></span> VirusTotal</h2>
+					<?php $vt_kayitli = ! empty( $ayarlar['vt_api_key'] ); ?>
 					<div style="padding:10px 0 6px;">
 						<strong>API anahtarı:</strong>
-						<input type="password" name="vt_api_key" class="regular-text" autocomplete="off" value="<?php echo esc_attr( isset( $ayarlar['vt_api_key'] ) ? $ayarlar['vt_api_key'] : '' ); ?>" placeholder="VirusTotal API anahtarınız" />
-						<p class="description"><a href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noopener">virustotal.com</a> üzerinden ücretsiz bir hesap açıp API anahtarınızı buraya yapıştırın. Ücretsiz anahtar ~4 istek/dakika ile sınırlıdır.</p>
+						<input type="password" name="vt_api_key" class="regular-text" autocomplete="off" value="" placeholder="<?php echo esc_attr( $vt_kayitli ? '•••••••• kayıtlı — değiştirmek için yeni anahtar girin' : 'VirusTotal API anahtarınız' ); ?>" />
+						<?php if ( $vt_kayitli ) : ?>
+							<label style="margin-left:10px;"><input type="checkbox" name="wpgk_vt_temizle" value="1" /> Anahtarı kaldır</label>
+						<?php endif; ?>
+						<p class="description"><a href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noopener">virustotal.com</a> üzerinden ücretsiz bir hesap açıp API anahtarınızı buraya yapıştırın. Anahtar güvenlik için maskelenir; boş bırakıp kaydederseniz mevcut anahtar korunur. Ücretsiz anahtar ~4 istek/dakika ile sınırlıdır.</p>
 					</div>
 					<label class="wpgk-toggle">
 						<input type="checkbox" name="vt_otomatik" value="1" <?php checked( ! empty( $ayarlar['vt_otomatik'] ) ); ?> />
@@ -505,15 +532,10 @@ class WPGK_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		global $wpdb;
-		$tablo = $wpdb->prefix . WPGK_Logger::TABLO;
-		$sayi  = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$tablo} WHERE seviye = %s AND zaman >= %s",
-				'kritik',
-				gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS )
-			)
-		);
+		// Saat dilimi tutarlılığı için merkezi sayım metodunu kullan (zaman yerel
+		// saatle saklanır; doğrudan time()/gmdate karşılaştırması offset hatası verir).
+		$sayimlar = WPGK_Logger::seviye_sayimlari( 24 );
+		$sayi     = (int) $sayimlar['kritik'];
 		if ( $sayi > 0 ) {
 			printf(
 				'<div class="notice notice-error"><p><strong>WP Radar:</strong> Son 24 saatte %d kritik güvenlik olayı tespit edildi. <a href="%s">Olay günlüğünü inceleyin</a>.</p></div>',

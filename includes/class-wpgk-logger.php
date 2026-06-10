@@ -161,20 +161,43 @@ class WPGK_Logger {
 
 	/**
 	 * İstemci IP adresini güvenli biçimde döndürür.
+	 *
+	 * GÜVENLİK: X-Forwarded-For / CF-Connecting-IP istemci tarafından sahte
+	 * gönderilebilen başlıklardır. Bunlara körlemesine güvenmek, saldırganın her
+	 * istekte farklı bir sahte IP göndererek giriş kilidini (brute-force koruması)
+	 * atlamasına ya da kurbanın IP'sini taklit ederek onu kilitletmesine olanak tanır.
+	 *
+	 * Bu nedenle:
+	 *  - Varsayılan/CDN dışı: yalnızca REMOTE_ADDR (sahtelenemez soket adresi).
+	 *  - Proxy/CDN modu açık (proxy_guven): önce CF-Connecting-IP, sonra
+	 *    X-Forwarded-For içindeki ilk PUBLIC adres (özel-aralık enjeksiyonu atlanır),
+	 *    sonra REMOTE_ADDR.
 	 */
 	public static function ip_al() {
-		$basliklar = array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' );
-		foreach ( $basliklar as $baslik ) {
-			if ( ! empty( $_SERVER[ $baslik ] ) ) {
-				$deger   = wp_unslash( $_SERVER[ $baslik ] );
-				$parcalar = explode( ',', $deger );
-				$ilk     = trim( $parcalar[0] );
-				if ( filter_var( $ilk, FILTER_VALIDATE_IP ) ) {
-					return $ilk;
+		$ayarlar     = get_option( 'wpgk_ayarlar', array() );
+		$proxy_guven = ! empty( $ayarlar['proxy_guven'] );
+
+		if ( $proxy_guven ) {
+			// Cloudflare gibi proxy'lerin yazdığı, istemcinin geçersiz kılamadığı başlık.
+			if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+				$cf = trim( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
+				if ( filter_var( $cf, FILTER_VALIDATE_IP ) ) {
+					return $cf;
+				}
+			}
+			// X-Forwarded-For: yalnızca ilk PUBLIC adresi kabul et (özel/rezerve aralıkları atla).
+			if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+				foreach ( explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) as $aday ) {
+					$aday = trim( $aday );
+					if ( filter_var( $aday, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+						return $aday;
+					}
 				}
 			}
 		}
-		return '0.0.0.0';
+
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		return filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '0.0.0.0';
 	}
 
 	/**
