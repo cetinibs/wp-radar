@@ -1,9 +1,9 @@
 # WP Radar
 
-**Comprehensive security radar for WordPress** ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, VirusTotal reputation checks, server hardening, and instant email alerts for critical events.
+**Comprehensive security radar for WordPress** ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â brute-force and login protection, exploit and bot blocking, malware and file-integrity scanning, VirusTotal reputation checks, server hardening, and instant email alerts for critical events.
 
 <p>
-  <img alt="Version" src="https://img.shields.io/badge/version-2.5.1-blue.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-2.5.2-blue.svg">
   <img alt="WordPress" src="https://img.shields.io/badge/WordPress-5.0%2B-21759b.svg">
   <img alt="PHP" src="https://img.shields.io/badge/PHP-7.0%2B-777bb4.svg">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--2.0--or--later-green.svg">
@@ -40,7 +40,7 @@ WP Radar is a defensive, all-in-one security plugin that hardens a WordPress sit
 - Disables the in-dashboard file editor (`DISALLOW_FILE_EDIT`), protects sensitive files, and prevents directory listing via `.htaccess`
 
 ### VirusTotal integration
-- On-demand URL and file (SHA-256) reputation lookups via the VirusTotal API v3 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â aggregated verdicts from 70+ security engines
+- On-demand URL and file (SHA-256) reputation lookups via the VirusTotal API v3 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â aggregated verdicts from 70+ security engines
 - Built-in "Scan with VirusTotal" tool in the admin panel (URL or hash)
 - Optional automatic verification of suspicious upload files during scans; a malicious verdict is logged as critical and triggers an email alert
 - Results cached for one hour to respect free-tier API limits

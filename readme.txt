@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.5.1
+Stable tag: 2.5.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,14 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.5.2 =
+* Davranışsal otomatik IP engelleme eklendi: aynı IP, belirlenen süre içinde
+  belirlenen eşiği aşan sayıda şüpheli olay (firewall imza eşleşmesi, kötü bot,
+  hatalı giriş, oran aşımı vb.) üretirse o IP geçici olarak tamamen engellenir.
+  Coğrafyadan bağımsızdır; yöneticiler ve IP beyaz listesi muaftır. Eşik, pencere
+  ve engel süresi panelden ayarlanır (varsayılan: 60 dk içinde 20 olay → 60 dk engel).
+  Otomatik engel tetiklendiğinde kritik olay loglanır ve e-posta gönderilir.
 
 = 2.5.1 =
 * Ülke engellemeye "beyaz liste" modu eklendi: yalnızca seçili ülkelere izin verip

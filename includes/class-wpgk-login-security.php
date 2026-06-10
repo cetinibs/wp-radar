@@ -112,16 +112,32 @@ class WPGK_Login_Security {
 		if ( self::beyaz_listede_mi( $ip ) ) {
 			return;
 		}
+		// Oturum açmış düzenleme yetkili kullanıcıları otomatik engelden muaf tut.
+		$duzenleyici = is_user_logged_in() && current_user_can( 'edit_posts' );
+
+		// Elle kara liste: her zaman uygulanır.
 		if ( self::kara_listede_mi( $ip ) ) {
 			WPGK_Logger::kaydet( 'giris', 'ip_kara_liste', 'Kara listedeki IP engellendi: ' . $ip, 'uyari' );
-			status_header( 403 );
-			nocache_headers();
-			wp_die(
-				esc_html__( 'Erişiminiz engellendi.', 'wp-radar' ),
-				esc_html__( 'Erişim Engellendi', 'wp-radar' ),
-				array( 'response' => 403 )
-			);
+			$this->engelle( __( 'Erişiminiz engellendi.', 'wp-radar' ) );
 		}
+
+		// Davranışsal otomatik engel (tekrarlayan şüpheli olaylar).
+		if ( ! $duzenleyici && WPGK_Logger::otomatik_engelli_mi( $ip ) ) {
+			$this->engelle( __( 'Şüpheli etkinlik nedeniyle erişiminiz geçici olarak engellendi.', 'wp-radar' ) );
+		}
+	}
+
+	/**
+	 * İsteği 403 ile sonlandırır.
+	 */
+	protected function engelle( $mesaj ) {
+		status_header( 403 );
+		nocache_headers();
+		wp_die(
+			esc_html( $mesaj ),
+			esc_html__( 'Erişim Engellendi', 'wp-radar' ),
+			array( 'response' => 403 )
+		);
 	}
 
 	/* ===================== GİRİŞ FORMU ALANLARI ===================== */

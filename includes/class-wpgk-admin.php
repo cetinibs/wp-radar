@@ -214,6 +214,11 @@ class WPGK_Admin {
 			'oran_max'              => isset( $_POST['oran_max'] ) ? max( 10, min( 100000, (int) $_POST['oran_max'] ) ) : 120,
 			'oran_pencere_sn'       => isset( $_POST['oran_pencere_sn'] ) ? max( 10, min( 3600, (int) $_POST['oran_pencere_sn'] ) ) : 60,
 			'oran_kilit_dk'         => isset( $_POST['oran_kilit_dk'] ) ? max( 1, min( 1440, (int) $_POST['oran_kilit_dk'] ) ) : 10,
+			// Davranışsal otomatik IP engelleme
+			'oto_engel'             => isset( $_POST['oto_engel'] ) ? 1 : 0,
+			'oto_engel_esik'        => isset( $_POST['oto_engel_esik'] ) ? max( 3, min( 100000, (int) $_POST['oto_engel_esik'] ) ) : 20,
+			'oto_engel_pencere_dk'  => isset( $_POST['oto_engel_pencere_dk'] ) ? max( 1, min( 1440, (int) $_POST['oto_engel_pencere_dk'] ) ) : 60,
+			'oto_engel_sure_dk'     => isset( $_POST['oto_engel_sure_dk'] ) ? max( 1, min( 10080, (int) $_POST['oto_engel_sure_dk'] ) ) : 60,
 			// Ülke engelleme (GeoIP)
 			'ulke_engel'            => isset( $_POST['ulke_engel'] ) ? 1 : 0,
 			'ulke_mod'              => ( isset( $_POST['ulke_mod'] ) && 'beyaz' === $_POST['ulke_mod'] ) ? 'beyaz' : 'kara',
@@ -499,6 +504,18 @@ class WPGK_Admin {
 						<input type="number" name="oran_pencere_sn" min="10" max="3600" value="<?php echo esc_attr( isset( $ayarlar['oran_pencere_sn'] ) ? $ayarlar['oran_pencere_sn'] : 60 ); ?>" class="small-text" /> saniyeyi aşarsa,
 						<input type="number" name="oran_kilit_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['oran_kilit_dk'] ) ? $ayarlar['oran_kilit_dk'] : 10 ); ?>" class="small-text" /> dakika engelle.
 						<p class="description">Engellenen istekler Olay Günlüğü'ne (canlı trafik görünümü) yazılır. Çok düşük değerler meşru ziyaretçileri etkileyebilir.</p>
+					</div>
+
+					<hr style="margin:14px 0;border:0;border-top:1px solid #f0f0f1;" />
+					<label class="wpgk-toggle">
+						<input type="checkbox" name="oto_engel" value="1" <?php checked( ! empty( $ayarlar['oto_engel'] ) ); ?> />
+						<span><strong>Davranışsal otomatik engelleme:</strong> aynı IP kısa sürede çok sayıda <em>şüpheli</em> olay üretirse (saldırı, sızma denemesi, hatalı giriş, bot) o IP'yi geçici olarak tamamen engelle. Coğrafyadan bağımsızdır — saldırgan nereden gelirse gelsin yakalanır; yöneticiler ve beyaz liste muaftır.</span>
+					</label>
+					<div style="padding:8px 0;">
+						<input type="number" name="oto_engel_esik" min="3" max="100000" value="<?php echo esc_attr( isset( $ayarlar['oto_engel_esik'] ) ? $ayarlar['oto_engel_esik'] : 20 ); ?>" class="small-text" /> şüpheli olay /
+						<input type="number" name="oto_engel_pencere_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['oto_engel_pencere_dk'] ) ? $ayarlar['oto_engel_pencere_dk'] : 60 ); ?>" class="small-text" /> dakikayı aşan IP'yi
+						<input type="number" name="oto_engel_sure_dk" min="1" max="10080" value="<?php echo esc_attr( isset( $ayarlar['oto_engel_sure_dk'] ) ? $ayarlar['oto_engel_sure_dk'] : 60 ); ?>" class="small-text" /> dakika engelle.
+						<p class="description">Şüpheli olaylar firewall imza eşleşmeleri, kötü bot, hatalı giriş, oran aşımı vb. olaylardır. "Binlerce istek" senaryosu için eşiği yüksek (ör. 100+) tutabilirsiniz; agresif koruma için düşürün.</p>
 					</div>
 				</div>
 

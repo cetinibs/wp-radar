@@ -68,6 +68,69 @@ class WPGK_Logger {
 		if ( 'kritik' === $seviye ) {
 			self::bildir( $modul, $olay, $mesaj );
 		}
+
+		// Davranışsal otomatik IP engelleme: aynı IP kısa sürede çok sayıda
+		// şüpheli olay üretirse geçici olarak engellenir.
+		self::ihlal_say( $modul, $olay, $seviye );
+	}
+
+	/**
+	 * İstek-temelli şüpheli olayları IP başına sayar; eşik aşılırsa IP'yi
+	 * geçici olarak otomatik engeller (transient). Coğrafyadan bağımsızdır.
+	 */
+	protected static function ihlal_say( $modul, $olay, $seviye ) {
+		$ayarlar = get_option( 'wpgk_ayarlar', array() );
+		if ( empty( $ayarlar['oto_engel'] ) ) {
+			return;
+		}
+		// Yalnızca istek bağlamındaki şüpheli olaylar sayılır.
+		if ( ! in_array( $seviye, array( 'uyari', 'kritik' ), true ) ) {
+			return;
+		}
+		if ( ! in_array( $modul, array( 'exploit', 'giris', 'oran', 'geoip', 'icerik', 'dosya' ), true ) ) {
+			return;
+		}
+		// Meta/engel olaylarını sayma (kendini besleme / döngü önlemi).
+		if ( in_array( $olay, array( 'otomatik_ip_engel', 'oran_limit_kilit', 'ip_kara_liste' ), true ) ) {
+			return;
+		}
+
+		$ip = self::ip_al();
+		if ( '0.0.0.0' === $ip ) {
+			return;
+		}
+		if ( class_exists( 'WPGK_Login_Security' ) && WPGK_Login_Security::beyaz_listede_mi( $ip ) ) {
+			return;
+		}
+
+		$esik    = max( 3, (int) ( isset( $ayarlar['oto_engel_esik'] ) ? $ayarlar['oto_engel_esik'] : 20 ) );
+		$pencere = max( 1, (int) ( isset( $ayarlar['oto_engel_pencere_dk'] ) ? $ayarlar['oto_engel_pencere_dk'] : 60 ) );
+		$sure    = max( 1, (int) ( isset( $ayarlar['oto_engel_sure_dk'] ) ? $ayarlar['oto_engel_sure_dk'] : 60 ) );
+
+		$sayac = 'wpgk_ihlal_' . md5( $ip );
+		$n     = (int) get_transient( $sayac ) + 1;
+		set_transient( $sayac, $n, $pencere * MINUTE_IN_SECONDS );
+
+		if ( $n >= $esik ) {
+			set_transient( 'wpgk_otoblok_' . md5( $ip ), 1, $sure * MINUTE_IN_SECONDS );
+			delete_transient( $sayac );
+			// Not: 'otomatik_ip_engel' olayı yukarıda sayımdan muaf tutulduğu için
+			// bu çağrı sonsuz döngüye girmez; kritik seviye e-posta bildirimi tetikler.
+			self::kaydet(
+				'giris',
+				'otomatik_ip_engel',
+				sprintf( 'IP %s, %d dk içinde %d şüpheli olay üretti; %d dk otomatik engellendi.', $ip, $pencere, $n, $sure ),
+				'kritik'
+			);
+		}
+	}
+
+	/**
+	 * IP davranışsal otomatik engel altında mı?
+	 */
+	public static function otomatik_engelli_mi( $ip = null ) {
+		$ip = $ip ? $ip : self::ip_al();
+		return (bool) get_transient( 'wpgk_otoblok_' . md5( $ip ) );
 	}
 
 	/**
