@@ -219,14 +219,6 @@ class WPGK_Admin {
 			'oto_engel_esik'        => isset( $_POST['oto_engel_esik'] ) ? max( 3, min( 100000, (int) $_POST['oto_engel_esik'] ) ) : 20,
 			'oto_engel_pencere_dk'  => isset( $_POST['oto_engel_pencere_dk'] ) ? max( 1, min( 1440, (int) $_POST['oto_engel_pencere_dk'] ) ) : 60,
 			'oto_engel_sure_dk'     => isset( $_POST['oto_engel_sure_dk'] ) ? max( 1, min( 10080, (int) $_POST['oto_engel_sure_dk'] ) ) : 60,
-			// Ülke engelleme (GeoIP)
-			'ulke_engel'            => isset( $_POST['ulke_engel'] ) ? 1 : 0,
-			'ulke_mod'              => ( isset( $_POST['ulke_mod'] ) && 'beyaz' === $_POST['ulke_mod'] ) ? 'beyaz' : 'kara',
-			'engelli_ulkeler'       => isset( $_POST['engelli_ulkeler'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['engelli_ulkeler'] ) ) ) : '',
-			'izinli_ulkeler'        => isset( $_POST['izinli_ulkeler'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['izinli_ulkeler'] ) ) ) : '',
-			'ulke_arama_motoru_izin' => isset( $_POST['ulke_arama_motoru_izin'] ) ? 1 : 0,
-			'geoip_saglayici'       => ( isset( $_POST['geoip_saglayici'] ) && 'ipinfo' === $_POST['geoip_saglayici'] ) ? 'ipinfo' : 'ip-api',
-			'geoip_token'           => isset( $_POST['geoip_token'] ) ? sanitize_text_field( wp_unslash( $_POST['geoip_token'] ) ) : '',
 			// Zafiyet taraması (WPScan)
 			'vuln_tarama'           => isset( $_POST['vuln_tarama'] ) ? 1 : 0,
 			'wpscan_token'          => isset( $_POST['wpscan_token'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['wpscan_token'] ) ) : '',
@@ -516,41 +508,6 @@ class WPGK_Admin {
 						<input type="number" name="oto_engel_pencere_dk" min="1" max="1440" value="<?php echo esc_attr( isset( $ayarlar['oto_engel_pencere_dk'] ) ? $ayarlar['oto_engel_pencere_dk'] : 60 ); ?>" class="small-text" /> dakikayı aşan IP'yi
 						<input type="number" name="oto_engel_sure_dk" min="1" max="10080" value="<?php echo esc_attr( isset( $ayarlar['oto_engel_sure_dk'] ) ? $ayarlar['oto_engel_sure_dk'] : 60 ); ?>" class="small-text" /> dakika engelle.
 						<p class="description">Şüpheli olaylar firewall imza eşleşmeleri, kötü bot, hatalı giriş, oran aşımı vb. olaylardır. "Binlerce istek" senaryosu için eşiği yüksek (ör. 100+) tutabilirsiniz; agresif koruma için düşürün.</p>
-					</div>
-				</div>
-
-				<!-- ÜLKE ENGELLEME (GEOIP) -->
-				<div class="wpgk-section">
-					<h2><span class="dashicons dashicons-admin-site" style="vertical-align:-3px;"></span> Ülke Engelleme (GeoIP)</h2>
-					<?php $ulke_mod = ( isset( $ayarlar['ulke_mod'] ) && 'beyaz' === $ayarlar['ulke_mod'] ) ? 'beyaz' : 'kara'; ?>
-					<label class="wpgk-toggle">
-						<input type="checkbox" name="ulke_engel" value="1" <?php checked( ! empty( $ayarlar['ulke_engel'] ) ); ?> />
-						<span>Coğrafi (ülke bazlı) erişim kontrolünü etkinleştir. Servis erişilemezse erişim engellenmez (fail-open).</span>
-					</label>
-					<div style="padding:8px 0;">
-						<strong>Mod:</strong>
-						<label style="margin-right:14px;"><input type="radio" name="ulke_mod" value="kara" <?php checked( 'kara' === $ulke_mod ); ?> /> Kara liste — yalnızca listedeki ülkeleri engelle</label>
-						<label><input type="radio" name="ulke_mod" value="beyaz" <?php checked( 'beyaz' === $ulke_mod ); ?> /> Beyaz liste — <strong>yalnızca listedeki ülkelere izin ver</strong>, gerisini engelle</label>
-					</div>
-					<div style="padding:6px 0;">
-						<strong>Engellenecek ülkeler (kara liste modu, ISO-2):</strong>
-						<input type="text" name="engelli_ulkeler" class="regular-text" value="<?php echo esc_attr( isset( $ayarlar['engelli_ulkeler'] ) ? $ayarlar['engelli_ulkeler'] : '' ); ?>" placeholder="ör. RU, CN, KP" />
-					</div>
-					<div style="padding:6px 0;">
-						<strong>İzin verilen ülkeler (beyaz liste modu, ISO-2):</strong>
-						<input type="text" name="izinli_ulkeler" class="regular-text" value="<?php echo esc_attr( isset( $ayarlar['izinli_ulkeler'] ) ? $ayarlar['izinli_ulkeler'] : '' ); ?>" placeholder="ör. TR" />
-						<p class="description">Yalnızca Türkiye'ye izin vermek için <code>TR</code> yazın; tüm diğer ülkeler engellenir. Liste boşsa engelleme yapılmaz (kazara tüm dünyayı kilitlemeyi önler).</p>
-					</div>
-					<label class="wpgk-toggle">
-						<input type="checkbox" name="ulke_arama_motoru_izin" value="1" <?php checked( ! empty( $ayarlar['ulke_arama_motoru_izin'] ) ); ?> />
-						<span><strong>Arama motorlarını muaf tut (SEO):</strong> doğrulanmış Googlebot, Bingbot vb. botlar engellenen ülkelerden gelse bile geçer (reverse-DNS ile doğrulanır). Beyaz liste modunda <strong>açık tutmanız önerilir</strong>, aksi halde Google siteyi tarayamaz.</span>
-					</label>
-					<div style="padding:6px 0;">
-						<strong>GeoIP sağlayıcı:</strong>
-						<label style="margin-right:12px;"><input type="radio" name="geoip_saglayici" value="ip-api" <?php checked( 'ipinfo' !== ( isset( $ayarlar['geoip_saglayici'] ) ? $ayarlar['geoip_saglayici'] : 'ip-api' ) ); ?> /> ip-api (anahtarsız)</label>
-						<label><input type="radio" name="geoip_saglayici" value="ipinfo" <?php checked( 'ipinfo' === ( isset( $ayarlar['geoip_saglayici'] ) ? $ayarlar['geoip_saglayici'] : '' ) ); ?> /> ipinfo (token)</label>
-						<input type="text" name="geoip_token" class="regular-text" style="margin-left:8px;" value="<?php echo esc_attr( isset( $ayarlar['geoip_token'] ) ? $ayarlar['geoip_token'] : '' ); ?>" placeholder="ipinfo token (yalnızca ipinfo için)" />
-						<p class="description">ip-api ücretsiz/anahtarsızdır (ticari olmayan kullanım, HTTP). Yoğun ticari trafikte ipinfo (token, HTTPS) önerilir. Sonuçlar IP başına 12 saat önbelleğe alınır.</p>
 					</div>
 				</div>
 

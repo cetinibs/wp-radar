@@ -87,7 +87,7 @@ class WPGK_Logger {
 		if ( ! in_array( $seviye, array( 'uyari', 'kritik' ), true ) ) {
 			return;
 		}
-		if ( ! in_array( $modul, array( 'exploit', 'giris', 'oran', 'geoip', 'icerik', 'dosya' ), true ) ) {
+		if ( ! in_array( $modul, array( 'exploit', 'giris', 'oran', 'icerik', 'dosya' ), true ) ) {
 			return;
 		}
 		// Meta/engel olaylarını sayma (kendini besleme / döngü önlemi).

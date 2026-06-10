@@ -4,7 +4,7 @@ Tags: güvenlik, security, malware, firewall, hardening, brute force, login, mal
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.0
-Stable tag: 2.5.2
+Stable tag: 2.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,6 +79,13 @@ WP Radar, hosta sızma girişimlerini birden çok katmanda durdurur:
   Aksi halde spam klasörler yeniden oluşturulmaya devam eder.
 
 == Sürüm Geçmişi ==
+
+= 2.6.0 =
+* Ülke/coğrafi engelleme (GeoIP) modülü tamamen kaldırıldı. Site artık dünyanın her
+  yerinden meşru ziyaretçilere açıktır; engelleme yalnızca DAVRANIŞA dayalıdır:
+  saldırı/şüpheli istek imzaları, kötü bot, brute-force, oran aşımı ve tekrarlayan
+  şüpheli olaylarda devreye giren davranışsal otomatik IP engeli. Böylece yurt dışı
+  meşru ziyaretçiler ve arama motorları engellenmez; yalnızca kötü niyetli trafik durur.
 
 = 2.5.2 =
 * Davranışsal otomatik IP engelleme eklendi: aynı IP, belirlenen süre içinde

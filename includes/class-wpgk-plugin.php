@@ -18,7 +18,6 @@ final class WPGK_Plugin {
 	public $login_guard;
 	public $login_security;
 	public $rate_limit;
-	public $geoip;
 	public $vuln_scan;
 	public $hardening;
 	public $admin;
@@ -38,7 +37,6 @@ final class WPGK_Plugin {
 		$this->login_guard    = new WPGK_Login_Guard();
 		$this->login_security = new WPGK_Login_Security();
 		$this->rate_limit     = new WPGK_Rate_Limit();
-		$this->geoip          = new WPGK_GeoIP();
 		$this->vuln_scan      = new WPGK_Vuln_Scan();
 		$this->hardening      = new WPGK_Hardening();
 
