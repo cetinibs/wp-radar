@@ -47,7 +47,7 @@ final class WPGK_Plugin {
 		// Günlük bakım: log tablosunu buda.
 		add_action( 'wpgk_gunluk_tarama', array( 'WPGK_Logger', 'buda' ) );
 
-		load_plugin_textdomain( 'wp-radar', false, dirname( WPGK_BASENAME ) . '/languages' );
+		load_plugin_textdomain( 'ck-radar-security', false, dirname( WPGK_BASENAME ) . '/languages' );
 	}
 
 	private function __clone() {}

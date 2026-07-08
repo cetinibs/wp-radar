@@ -6,7 +6,7 @@
  * - 2FA: RFC 6238 uyumlu TOTP (Google Authenticator, Authy vb.). Kullanıcı
  *   bazında etkinleştirilir; gizli anahtar kullanıcı meta'sında saklanır.
  * - CAPTCHA: dış servis gerektirmeyen basit matematik sorusu.
- * - IP listeleri: beyaz liste tüm WP Radar engellerini atlar; kara liste
+ * - IP listeleri: beyaz liste tüm CK Radar Security engellerini atlar; kara liste
  *   erişimi tamamen reddeder (CIDR /24 vb. desteklenir).
  */
 
@@ -31,7 +31,7 @@ class WPGK_Login_Security {
 		add_filter( 'authenticate', array( $this, 'captcha_dogrula' ), 21, 1 );
 		add_filter( 'authenticate', array( $this, 'iki_faktor_dogrula' ), 30, 3 );
 
-		// Kullanıcının 2FA kurulum sayfası (WP Radar alt menüsü) işlemleri.
+		// Kullanıcının 2FA kurulum sayfası (CK Radar Security alt menüsü) işlemleri.
 		add_action( 'admin_init', array( $this, 'iki_faktor_form_isle' ) );
 	}
 
@@ -118,12 +118,12 @@ class WPGK_Login_Security {
 		// Elle kara liste: her zaman uygulanır.
 		if ( self::kara_listede_mi( $ip ) ) {
 			WPGK_Logger::kaydet( 'giris', 'ip_kara_liste', 'Kara listedeki IP engellendi: ' . $ip, 'uyari' );
-			$this->engelle( __( 'Erişiminiz engellendi.', 'wp-radar' ) );
+			$this->engelle( __( 'Erişiminiz engellendi.', 'ck-radar-security' ) );
 		}
 
 		// Davranışsal otomatik engel (tekrarlayan şüpheli olaylar).
 		if ( ! $duzenleyici && WPGK_Logger::otomatik_engelli_mi( $ip ) ) {
-			$this->engelle( __( 'Şüpheli etkinlik nedeniyle erişiminiz geçici olarak engellendi.', 'wp-radar' ) );
+			$this->engelle( __( 'Şüpheli etkinlik nedeniyle erişiminiz geçici olarak engellendi.', 'ck-radar-security' ) );
 		}
 	}
 
@@ -135,7 +135,7 @@ class WPGK_Login_Security {
 		nocache_headers();
 		wp_die(
 			esc_html( $mesaj ),
-			esc_html__( 'Erişim Engellendi', 'wp-radar' ),
+			esc_html__( 'Erişim Engellendi', 'ck-radar-security' ),
 			array( 'response' => 403 )
 		);
 	}
@@ -175,7 +175,7 @@ class WPGK_Login_Security {
 			return $user;
 		}
 		// Yalnızca asıl giriş POST'unda denetle (XML-RPC vb. değil).
-		if ( 'POST' !== ( isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( $_SERVER['REQUEST_METHOD'] ) : '' ) ) {
+		if ( 'POST' !== ( isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '' ) ) {
 			return $user;
 		}
 		if ( empty( $_POST['log'] ) && empty( $_POST['pwd'] ) ) {
@@ -190,7 +190,7 @@ class WPGK_Login_Security {
 		}
 
 		if ( false === $beklenen || null === $cevap || (int) $beklenen !== $cevap ) {
-			return new WP_Error( 'wpgk_captcha', __( '<strong>Hata:</strong> Güvenlik sorusunun yanıtı yanlış.', 'wp-radar' ) );
+			return new WP_Error( 'wpgk_captcha', __( '<strong>Hata:</strong> Güvenlik sorusunun yanıtı yanlış.', 'ck-radar-security' ) );
 		}
 		return $user;
 	}
@@ -223,12 +223,12 @@ class WPGK_Login_Security {
 
 		$kod = isset( $_POST['wpgk_2fa_kod'] ) ? preg_replace( '/\D/', '', wp_unslash( $_POST['wpgk_2fa_kod'] ) ) : '';
 		if ( '' === $kod ) {
-			return new WP_Error( 'wpgk_2fa_gerekli', __( '<strong>Doğrulama gerekli:</strong> Lütfen 2FA uygulamanızdaki 6 haneli kodu girin.', 'wp-radar' ) );
+			return new WP_Error( 'wpgk_2fa_gerekli', __( '<strong>Doğrulama gerekli:</strong> Lütfen 2FA uygulamanızdaki 6 haneli kodu girin.', 'ck-radar-security' ) );
 		}
 		$secret = (string) get_user_meta( $user->ID, self::META_SECRET, true );
 		if ( ! self::totp_dogrula( $secret, $kod ) ) {
 			WPGK_Logger::kaydet( 'giris', '2fa_basarisiz', 'Hatalı 2FA kodu: ' . $user->user_login, 'uyari' );
-			return new WP_Error( 'wpgk_2fa_hata', __( '<strong>Hata:</strong> Doğrulama kodu geçersiz.', 'wp-radar' ) );
+			return new WP_Error( 'wpgk_2fa_hata', __( '<strong>Hata:</strong> Doğrulama kodu geçersiz.', 'ck-radar-security' ) );
 		}
 		return $user;
 	}
@@ -348,7 +348,7 @@ class WPGK_Login_Security {
 	}
 
 	/**
-	 * 2FA kurulum sayfasını çizer (WP Radar alt menüsü).
+	 * 2FA kurulum sayfasını çizer (CK Radar Security alt menüsü).
 	 */
 	public function sayfa_render() {
 		$uid    = get_current_user_id();
@@ -381,7 +381,7 @@ class WPGK_Login_Security {
 			<?php
 			$genel = get_option( 'wpgk_ayarlar', array() );
 			if ( empty( $genel['giris_2fa'] ) ) {
-				echo '<div class="notice notice-info"><p>2FA modülü şu an <strong>kapalı</strong>. WP Radar ayarlarından "Giriş güvenliği → 2FA" seçeneğini açın; aksi halde kurduğunuz 2FA girişte istenmez.</p></div>';
+				echo '<div class="notice notice-info"><p>2FA modülü şu an <strong>kapalı</strong>. CK Radar Security ayarlarından "Giriş güvenliği → 2FA" seçeneğini açın; aksi halde kurduğunuz 2FA girişte istenmez.</p></div>';
 			}
 			?>
 

@@ -166,7 +166,7 @@ class WPGK_Logger {
 		$site  = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
 		$konu  = sprintf( '[%s] Kritik Güvenlik Olayı: %s', $site, $olay );
 		$govde = sprintf(
-			"WP Radar kritik bir güvenlik olayı tespit etti.\n\n"
+			"CK Radar Security kritik bir güvenlik olayı tespit etti.\n\n"
 			. "Site: %s\nModül: %s\nOlay: %s\nMesaj: %s\nIP: %s\nKullanıcı ID: %s\nZaman: %s\nİstek: %s\n\n"
 			. "Olay günlüğünü inceleyin: %s\n",
 			home_url(),
@@ -212,9 +212,9 @@ class WPGK_Logger {
 			return false;
 		}
 		$site  = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
-		$konu  = sprintf( '[%s] WP Radar test bildirimi', $site );
+		$konu  = sprintf( '[%s] CK Radar Security test bildirimi', $site );
 		$govde = sprintf(
-			"Bu bir test e-postasıdır.\n\nWP Radar e-posta bildirimleri düzgün çalışıyor.\nBu mesajı aldıysanız kritik güvenlik olaylarında da bildirim alacaksınız.\n\nSite: %s\nZaman: %s\nAlıcılar: %s\n",
+			"Bu bir test e-postasıdır.\n\nCK Radar Security e-posta bildirimleri düzgün çalışıyor.\nBu mesajı aldıysanız kritik güvenlik olaylarında da bildirim alacaksınız.\n\nSite: %s\nZaman: %s\nAlıcılar: %s\n",
 			home_url(),
 			current_time( 'mysql' ),
 			implode( ', ', $alicilar )
@@ -243,14 +243,14 @@ class WPGK_Logger {
 		if ( $proxy_guven ) {
 			// Cloudflare gibi proxy'lerin yazdığı, istemcinin geçersiz kılamadığı başlık.
 			if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
-				$cf = trim( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
+				$cf = trim( sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) );
 				if ( filter_var( $cf, FILTER_VALIDATE_IP ) ) {
 					return $cf;
 				}
 			}
 			// X-Forwarded-For: yalnızca ilk PUBLIC adresi kabul et (özel/rezerve aralıkları atla).
 			if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-				foreach ( explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) as $aday ) {
+				foreach ( explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) ) as $aday ) {
 					$aday = trim( $aday );
 					if ( filter_var( $aday, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
 						return $aday;
@@ -259,7 +259,7 @@ class WPGK_Logger {
 			}
 		}
 
-		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) ) : '';
 		return filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '0.0.0.0';
 	}
 

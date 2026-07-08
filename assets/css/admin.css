@@ -1,0 +1,12 @@
+.wpgk-cards{display:flex;flex-wrap:wrap;gap:14px;margin:16px 0 24px}
+.wpgk-card{flex:1 1 200px;background:#fff;border:1px solid #dcdcde;border-left-width:4px;border-radius:6px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.wpgk-card .num{font-size:26px;font-weight:600;line-height:1.2}
+.wpgk-card .lbl{color:#646970;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+.wpgk-card.ok{border-left-color:#00a32a}.wpgk-card.warn{border-left-color:#dba617}.wpgk-card.bad{border-left-color:#d63638}.wpgk-card.info{border-left-color:#2271b1}
+.wpgk-section{background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:4px 18px 10px;margin:0 0 18px}
+.wpgk-section h2{font-size:15px;margin:14px 0 4px;padding-bottom:8px;border-bottom:1px solid #f0f0f1}
+.wpgk-toggle{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f6f7f7}
+.wpgk-toggle:last-child{border-bottom:0}
+.wpgk-toggle input{margin-top:3px}
+.wpgk-badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.wpgk-badge.on{background:#edfaef;color:#00782b}.wpgk-badge.off{background:#fcf0f1;color:#b32d2e}

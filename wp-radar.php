@@ -1,22 +1,23 @@
 <?php
 /**
- * Plugin Name:       WP Radar
- * Plugin URI:        https://example.com/wp-radar
- * Description:        Kapsamlı WordPress güvenlik radarı: brute-force/giriş koruması, güvenlik başlıkları ve sertleştirme, çekirdek dosya bütünlüğü, eklenti/tema açığı sızma engeli, yetkisiz kullanıcı/kök klasör tespiti ve zararlı link/SEO spam temizliği.
- * Version:           2.6.0
+ * Plugin Name:       CK Radar Security
+ * Plugin URI:        https://github.com/cetinibs/wp-radar
+ * Description:        Comprehensive WordPress security: brute-force/login protection, security headers and hardening, core file integrity, exploit/intrusion blocking, unauthorized user and root-folder detection, and malicious link / SEO-spam cleanup.
+ * Version:           2.7.0
  * Requires at least: 5.0
  * Requires PHP:      7.0
- * Author:            WP Radar
+ * Author:            Çetin Kaya
+ * Author URI:        https://github.com/cetinibs
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       wp-radar
+ * Text Domain:       ck-radar-security
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Doğrudan erişim engellendi.
 }
 
-define( 'WPGK_VERSION', '2.6.0' );
+define( 'WPGK_VERSION', '2.7.0' );
 define( 'WPGK_FILE', __FILE__ );
 define( 'WPGK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPGK_URL', plugin_dir_url( __FILE__ ) );
@@ -52,7 +53,13 @@ function wpgk_varsayilan_ayarlar() {
 	return array(
 		// Çekirdek korumalar
 		'kullanici_korumasi'      => 1,
+		// Yetkisiz admin hesaplarını otomatik etkisizleştir (subscriber + oturum sonlandır).
+		// Kilitlenme riski taşıdığından varsayılan KAPALI (opt-in).
+		'sahte_admin_otomatik'    => 0,
 		'dosya_korumasi'          => 1,
+		// Root dizinindeki web shell imzalı PHP dosyalarını otomatik karantinaya al.
+		// İmza tabanlı olduğundan yanlış-pozitif riski düşük → varsayılan AÇIK.
+		'root_php_otomatik'       => 1,
 		'icerik_korumasi'         => 1,
 		'exploit_korumasi'        => 1,
 		'dosya_duzenleme_kapat'   => 1,

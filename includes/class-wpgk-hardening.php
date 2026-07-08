@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WPGK_Hardening {
 
-	const HTACCESS_ETIKET = 'WP Radar';
+	const HTACCESS_ETIKET = 'CK Radar Security';
 
 	public function __construct() {
 		$ayarlar = get_option( 'wpgk_ayarlar', array() );
@@ -54,12 +54,9 @@ class WPGK_Hardening {
 	protected function surum_gizle() {
 		// <meta name="generator"> kaldır.
 		remove_action( 'wp_head', 'wp_generator' );
+		// the_generator filtresi boş döndüğü için <meta generator> hem wp_head'de
+		// hem de tüm feed çıktılarında (RSS/Atom/RDF) temizlenir; ayrı feed kancası gerekmez.
 		add_filter( 'the_generator', '__return_empty_string' );
-
-		// RSS jeneratör etiketlerini temizle.
-		foreach ( array( 'rss2_head', 'commentsrss2_head', 'rss_head', 'rdf_header', 'atom_head', 'comments_atom_head', 'opml_head', 'app_head' ) as $kanca ) {
-			add_filter( $kanca, array( $this, 'generator_temizle' ), 9 );
-		}
 
 		// Script/style sürüm sorgu parametrelerini (?ver=x.y) kaldır.
 		add_filter( 'style_loader_src', array( $this, 'surum_parametresi_temizle' ), 9999 );
@@ -69,10 +66,6 @@ class WPGK_Hardening {
 		if ( ! headers_sent() && function_exists( 'header_remove' ) ) {
 			@header_remove( 'X-Powered-By' );
 		}
-	}
-
-	public function generator_temizle() {
-		return '';
 	}
 
 	/**
@@ -129,6 +122,12 @@ class WPGK_Hardening {
 			$kurallar[] = '  Deny from all';
 			$kurallar[] = '</IfModule>';
 			$kurallar[] = '</FilesMatch>';
+			$kurallar[] = '';
+			$kurallar[] = '# uploads dizininde PHP/script çalıştırmayı engelle (web shell yüklemeleri etkisizleşir)';
+			$kurallar[] = '<IfModule mod_rewrite.c>';
+			$kurallar[] = 'RewriteEngine On';
+			$kurallar[] = 'RewriteRule ^wp-content/uploads/.*\.(?:php|php[0-9]|phtml|pht|phar|cgi|pl|asp|aspx|jsp)$ - [F,NC,L]';
+			$kurallar[] = '</IfModule>';
 		}
 
 		require_once ABSPATH . 'wp-admin/includes/misc.php';

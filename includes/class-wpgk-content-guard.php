@@ -305,8 +305,8 @@ class WPGK_Content_Guard {
 		if ( ( $spam && $link ) || $gizli ) {
 			WPGK_Logger::kaydet( 'icerik', 'spam_yorum_engellendi', 'Spam yorum engellendi. Kalıp: ' . ( $gizli ? 'gizli link' : $eslesme ), 'uyari' );
 			wp_die(
-				esc_html__( 'Yorumunuz güvenlik filtresine takıldı.', 'wp-radar' ),
-				esc_html__( 'Engellendi', 'wp-radar' ),
+				esc_html__( 'Yorumunuz güvenlik filtresine takıldı.', 'ck-radar-security' ),
+				esc_html__( 'Engellendi', 'ck-radar-security' ),
 				array( 'response' => 403 )
 			);
 		}

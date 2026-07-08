@@ -79,8 +79,8 @@ class WPGK_Rate_Limit {
 			header( 'Retry-After: ' . ( (int) $kilit_dk * 60 ) );
 		}
 		wp_die(
-			esc_html__( 'Çok fazla istek gönderdiniz. Lütfen bir süre sonra tekrar deneyin.', 'wp-radar' ),
-			esc_html__( 'Hız Sınırı', 'wp-radar' ),
+			esc_html__( 'Çok fazla istek gönderdiniz. Lütfen bir süre sonra tekrar deneyin.', 'ck-radar-security' ),
+			esc_html__( 'Hız Sınırı', 'ck-radar-security' ),
 			array( 'response' => 429 )
 		);
 	}

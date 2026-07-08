@@ -57,7 +57,7 @@ class WPGK_Login_Guard {
 				'wpgk_giris_kilit',
 				sprintf(
 					/* translators: %d: dakika */
-					esc_html__( 'Çok fazla başarısız giriş denemesi. Lütfen %d dakika sonra tekrar deneyin.', 'wp-radar' ),
+					esc_html__( 'Çok fazla başarısız giriş denemesi. Lütfen %d dakika sonra tekrar deneyin.', 'ck-radar-security' ),
 					$dk
 				)
 			);
@@ -111,6 +111,6 @@ class WPGK_Login_Guard {
 		if ( ! $this->aktif() || empty( $this->ayar( 'giris_jenerik_hata' ) ) ) {
 			return $hata;
 		}
-		return esc_html__( 'Giriş bilgileri hatalı.', 'wp-radar' );
+		return esc_html__( 'Giriş bilgileri hatalı.', 'ck-radar-security' );
 	}
 }

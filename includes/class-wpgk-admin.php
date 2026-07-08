@@ -9,8 +9,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WPGK_Admin {
 
+	/** @var string[] Eklenti yönetim sayfalarının kanca son ekleri. */
+	protected $sayfa_kancalari = array();
+
 	public function __construct() {
 		add_action( 'admin_menu', array( $this, 'menu_ekle' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'varliklari_yukle' ) );
 		add_action( 'admin_init', array( $this, 'ayarlari_kaydet' ) );
 		add_action( 'admin_init', array( $this, 'taramayi_calistir' ) );
 		add_action( 'admin_init', array( $this, 'test_eposta_gonder' ) );
@@ -150,21 +154,36 @@ class WPGK_Admin {
 	}
 
 	public function menu_ekle() {
-		add_menu_page(
-			'WP Radar',
-			'WP Radar',
+		$this->sayfa_kancalari[] = add_menu_page(
+			'CK Radar Security',
+			'CK Radar Security',
 			'manage_options',
 			'wpgk-panel',
 			array( $this, 'panel_render' ),
 			'dashicons-shield',
 			80
 		);
-		add_submenu_page( 'wpgk-panel', 'Olay Günlüğü', 'Olay Günlüğü', 'manage_options', 'wpgk-gunluk', array( $this, 'gunluk_render' ) );
+		$this->sayfa_kancalari[] = add_submenu_page( 'wpgk-panel', 'Olay Günlüğü', 'Olay Günlüğü', 'manage_options', 'wpgk-gunluk', array( $this, 'gunluk_render' ) );
 		// 2FA kurulumu: her oturum açmış kullanıcı kendi hesabı için yapabilir.
 		$ls = WPGK_Plugin::instance()->login_security;
 		if ( $ls ) {
-			add_submenu_page( 'wpgk-panel', 'İki Faktörlü Doğrulama', '2FA Kurulumu', 'read', 'wpgk-2fa', array( $ls, 'sayfa_render' ) );
+			$this->sayfa_kancalari[] = add_submenu_page( 'wpgk-panel', 'İki Faktörlü Doğrulama', '2FA Kurulumu', 'read', 'wpgk-2fa', array( $ls, 'sayfa_render' ) );
 		}
+	}
+
+	/**
+	 * Panel stilini yalnızca eklentinin kendi yönetim sayfalarında yükler.
+	 */
+	public function varliklari_yukle( $kanca ) {
+		if ( ! in_array( $kanca, $this->sayfa_kancalari, true ) ) {
+			return;
+		}
+		wp_enqueue_style(
+			'ck-radar-security-admin',
+			WPGK_URL . 'assets/css/admin.css',
+			array(),
+			WPGK_VERSION
+		);
 	}
 
 	/**
@@ -183,7 +202,9 @@ class WPGK_Admin {
 
 		$ayarlar = array(
 			'kullanici_korumasi'    => isset( $_POST['kullanici_korumasi'] ) ? 1 : 0,
+			'sahte_admin_otomatik'  => isset( $_POST['sahte_admin_otomatik'] ) ? 1 : 0,
 			'dosya_korumasi'        => isset( $_POST['dosya_korumasi'] ) ? 1 : 0,
+			'root_php_otomatik'     => isset( $_POST['root_php_otomatik'] ) ? 1 : 0,
 			'icerik_korumasi'       => isset( $_POST['icerik_korumasi'] ) ? 1 : 0,
 			'exploit_korumasi'      => isset( $_POST['exploit_korumasi'] ) ? 1 : 0,
 			'dosya_duzenleme_kapat' => isset( $_POST['dosya_duzenleme_kapat'] ) ? 1 : 0,
@@ -273,6 +294,8 @@ class WPGK_Admin {
 
 		$secenekler = array(
 			'kullanici_korumasi'    => 'Kullanıcı koruması (yetkisiz admin oluşturma/rol yükseltme engelle)',
+			'sahte_admin_otomatik'  => 'Yetkisiz admin hesaplarını otomatik etkisizleştir (güvenilir listede olmayanı subscriber\'a düşür + oturumları sonlandır)',
+			'root_php_otomatik'     => 'Root dizinindeki backdoor PHP dosyalarını otomatik karantinaya al (yalnızca web shell imzalı olanlar)',
 			'dosya_korumasi'        => 'Dosya koruması (root/uploads içine shell & PHP yazımını engelle)',
 			'icerik_korumasi'       => 'İçerik koruması (porno/kumar/oyun spam linklerini engelle)',
 			'exploit_korumasi'      => 'Exploit koruması (zafiyetli istek ve sızma denemelerini engelle)',
@@ -299,9 +322,9 @@ class WPGK_Admin {
 		);
 		// Gruplandırılmış koruma seçenekleri (kullanıcı dostu kartlar).
 		$gruplar = array(
-			'Giriş & Kullanıcı'        => array( 'kullanici_korumasi', 'giris_korumasi', 'giris_jenerik_hata' ),
+			'Giriş & Kullanıcı'        => array( 'kullanici_korumasi', 'sahte_admin_otomatik', 'giris_korumasi', 'giris_jenerik_hata' ),
 			'Ağ & İstek (Firewall)'    => array( 'exploit_korumasi', 'kotu_bot_engelle', 'xmlrpc_kapat', 'xmlrpc_tam_engel', 'pingback_kapat', 'sitemap_kullanici_gizle' ),
-			'Dosya & Sistem'           => array( 'dosya_korumasi', 'dosya_duzenleme_kapat', 'cekirdek_butunluk', 'yapi_korumasi', 'kok_klasor_korumasi', 'kok_klasor_otomatik_sil', 'hassas_dosya_koru', 'dizin_listeleme_kapat' ),
+			'Dosya & Sistem'           => array( 'dosya_korumasi', 'root_php_otomatik', 'dosya_duzenleme_kapat', 'cekirdek_butunluk', 'yapi_korumasi', 'kok_klasor_korumasi', 'kok_klasor_otomatik_sil', 'hassas_dosya_koru', 'dizin_listeleme_kapat' ),
 			'Sertleştirme (Hardening)' => array( 'guvenlik_basliklari', 'surum_gizle', 'hsts', 'hsts_preload' ),
 			'İçerik'                   => array( 'icerik_korumasi', 'link_korumasi' ),
 		);
@@ -320,23 +343,8 @@ class WPGK_Admin {
 		$son_tarama   = get_option( 'wpgk_son_tarama', '' );
 		?>
 		<div class="wrap wpgk-wrap">
-			<h1><span class="dashicons dashicons-shield" style="font-size:28px;width:28px;height:28px;vertical-align:-4px;"></span> WP Radar</h1>
+			<h1><span class="dashicons dashicons-shield" style="font-size:28px;width:28px;height:28px;vertical-align:-4px;"></span> CK Radar Security</h1>
 			<p class="description">Kapsamlı WordPress güvenlik radarı: brute-force, sızma, zararlı dosya/klasör, spam link koruması ve VirusTotal itibar kontrolü.</p>
-
-			<style>
-				.wpgk-cards{display:flex;flex-wrap:wrap;gap:14px;margin:16px 0 24px}
-				.wpgk-card{flex:1 1 200px;background:#fff;border:1px solid #dcdcde;border-left-width:4px;border-radius:6px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-				.wpgk-card .num{font-size:26px;font-weight:600;line-height:1.2}
-				.wpgk-card .lbl{color:#646970;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
-				.wpgk-card.ok{border-left-color:#00a32a}.wpgk-card.warn{border-left-color:#dba617}.wpgk-card.bad{border-left-color:#d63638}.wpgk-card.info{border-left-color:#2271b1}
-				.wpgk-section{background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:4px 18px 10px;margin:0 0 18px}
-				.wpgk-section h2{font-size:15px;margin:14px 0 4px;padding-bottom:8px;border-bottom:1px solid #f0f0f1}
-				.wpgk-toggle{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f6f7f7}
-				.wpgk-toggle:last-child{border-bottom:0}
-				.wpgk-toggle input{margin-top:3px}
-				.wpgk-badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
-				.wpgk-badge.on{background:#edfaef;color:#00782b}.wpgk-badge.off{background:#fcf0f1;color:#b32d2e}
-			</style>
 
 			<!-- DURUM PANOSU -->
 			<div class="wpgk-cards">
@@ -475,7 +483,7 @@ class WPGK_Admin {
 					<div style="padding:12px 0 6px;">
 						<strong>IP beyaz listesi (engelleri atlar):</strong>
 						<textarea name="ip_beyaz_liste" rows="2" class="large-text" placeholder="Her satıra bir IP veya CIDR (ör. 203.0.113.5 veya 203.0.113.0/24)"><?php echo esc_textarea( isset( $ayarlar['ip_beyaz_liste'] ) ? $ayarlar['ip_beyaz_liste'] : '' ); ?></textarea>
-						<p class="description">Buradaki IP'ler tüm WP Radar engellerinden muaftır (kendi IP'nizi eklemeniz önerilir — kazara kilitlenmeyi önler).</p>
+						<p class="description">Buradaki IP'ler tüm CK Radar Security engellerinden muaftır (kendi IP'nizi eklemeniz önerilir — kazara kilitlenmeyi önler).</p>
 					</div>
 					<div style="padding:6px 0;">
 						<strong>IP kara listesi (tamamen engellenir):</strong>
@@ -626,7 +634,7 @@ class WPGK_Admin {
 		$sayi     = (int) $sayimlar['kritik'];
 		if ( $sayi > 0 ) {
 			printf(
-				'<div class="notice notice-error"><p><strong>WP Radar:</strong> Son 24 saatte %d kritik güvenlik olayı tespit edildi. <a href="%s">Olay günlüğünü inceleyin</a>.</p></div>',
+				'<div class="notice notice-error"><p><strong>CK Radar Security:</strong> Son 24 saatte %d kritik güvenlik olayı tespit edildi. <a href="%s">Olay günlüğünü inceleyin</a>.</p></div>',
 				esc_html( $sayi ),
 				esc_url( admin_url( 'admin.php?page=wpgk-gunluk' ) )
 			);

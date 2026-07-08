@@ -15,6 +15,14 @@ class WPGK_File_Guard {
 	/** Web shell / gizlenmiş kod imzaları. */
 	const SHELL_IMZA = '/<\?php|<\?=|eval\s*\(\s*\$|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|gzuncompress\s*\(|assert\s*\(\s*\$|system\s*\(|shell_exec\s*\(|passthru\s*\(|preg_replace\s*\(\s*["\'].*\/e|create_function\s*\(/i';
 
+	/**
+	 * Backdoor/web shell DAVRANIŞ imzaları — salt "<?php" açılış etiketini yakalamaz,
+	 * bu yüzden meşru bir PHP dosyasını yanlışlıkla zararlı saymaz. Yalnızca gerçek
+	 * arka kapı davranışlarını (kod çalıştırma, gizleme, kullanıcı girdisiyle dinamik
+	 * çağrı, dosya yükleme) tespit eder.
+	 */
+	const BACKDOOR_IMZA = '/eval\s*\(\s*\$|eval\s*\(\s*(base64_decode|gzinflate|str_rot13|gzuncompress|gzdecode)|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|gzuncompress\s*\(|assert\s*\(\s*\$|shell_exec\s*\(|\bsystem\s*\(|passthru\s*\(|popen\s*\(|proc_open\s*\(|create_function\s*\(|preg_replace\s*\(\s*["\'].*\/e|\$_(GET|POST|REQUEST|COOKIE|SERVER)\s*\[[^\]]*\]\s*\(|move_uploaded_file\s*\(/i';
+
 	/** Tehlikeli kabul edilen uzantılar. */
 	protected static $yasak_uzantilar = array(
 		'php', 'php3', 'php4', 'php5', 'php7', 'phtml', 'pht', 'phar',
@@ -32,6 +40,8 @@ class WPGK_File_Guard {
 		// Günlük bütünlük + uploads içi shell taraması.
 		add_action( 'wpgk_gunluk_tarama', array( $this, 'uploads_shell_tara' ) );
 		add_action( 'wpgk_gunluk_tarama', array( $this, 'butunluk_kontrol' ) );
+		// Bütünlük + root backdoor taramasını saatlik de çalıştır (hızlı müdahale).
+		add_action( 'wpgk_saatlik_tarama', array( $this, 'butunluk_kontrol' ) );
 
 		// Kök klasör spam koruması: saatlik + günlük + admin girişinde (kısıtlı).
 		add_action( 'wpgk_saatlik_tarama', array( __CLASS__, 'kok_klasor_tara' ) );
@@ -122,31 +132,9 @@ class WPGK_File_Guard {
 	}
 
 	/**
-	 * uploads klasöründe PHP çalıştırmayı .htaccess ile engelle (Apache).
-	 */
-	public static function uploads_htaccess_sertlestir() {
-		$upload = wp_get_upload_dir();
-		if ( empty( $upload['basedir'] ) || ! is_dir( $upload['basedir'] ) || ! is_writable( $upload['basedir'] ) ) {
-			return;
-		}
-		$yol = trailingslashit( $upload['basedir'] ) . '.htaccess';
-		$kural = "# WP Radar - uploads içinde script çalıştırma engeli\n"
-			. "<FilesMatch \"\\.(php|php3|php4|php5|php7|phtml|pht|phar|cgi|pl|asp|aspx|jsp)$\">\n"
-			. "    Require all denied\n"
-			. "</FilesMatch>\n";
-
-		$mevcut = is_readable( $yol ) ? file_get_contents( $yol ) : '';
-		if ( false === strpos( (string) $mevcut, 'WP Radar' ) ) {
-			file_put_contents( $yol, $kural . "\n" . $mevcut );
-		}
-	}
-
-	/**
 	 * Etkinleştirmede çekirdek dizinlerin bütünlük temelini (hash) kaydet.
 	 */
 	public static function baseline_olustur() {
-		self::uploads_htaccess_sertlestir();
-
 		$hedefler = array(
 			ABSPATH . 'wp-config.php',
 			ABSPATH . 'index.php',
@@ -203,13 +191,74 @@ class WPGK_File_Guard {
 
 		// Root dizininde beklenmeyen yeni .php dosyaları (sızma kalıcılığı).
 		$beklenen_root = array( 'index.php', 'wp-config.php', 'wp-load.php', 'wp-blog-header.php', 'wp-cron.php', 'wp-settings.php', 'wp-login.php', 'wp-links-opml.php', 'wp-comments-post.php', 'wp-signup.php', 'wp-activate.php', 'wp-trackback.php', 'wp-mail.php', 'xmlrpc.php', 'wp-config-sample.php' );
+		$otomatik      = ! empty( $ayarlar['root_php_otomatik'] );
 		$root_dosyalar = glob( ABSPATH . '*.php' );
 		foreach ( (array) $root_dosyalar as $dosya ) {
 			$ad = basename( $dosya );
-			if ( ! in_array( $ad, $beklenen_root, true ) ) {
-				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde beklenmeyen PHP dosyası: ' . $ad, 'kritik' );
+			if ( in_array( $ad, $beklenen_root, true ) ) {
+				continue;
+			}
+
+			// Beklenmeyen root .php: içeriğinde backdoor/web shell DAVRANIŞ imzası var mı?
+			// (Salt "<?php" değil; gerçek arka kapı davranışı aranır → meşru özel
+			// dosyalar yanlışlıkla karantinaya alınmaz.)
+			$icerik  = @file_get_contents( $dosya, false, null, 0, 65536 );
+			$zararli = ( false !== $icerik && preg_match( self::BACKDOOR_IMZA, $icerik ) );
+
+			if ( $zararli && $otomatik && self::karantinaya_al( $dosya ) ) {
+				WPGK_Logger::kaydet( 'dosya', 'root_php_karantina', 'Root dizinindeki backdoor karantinaya alındı ve çalıştırılamaz hale getirildi: ' . $ad, 'kritik' );
+			} elseif ( $zararli ) {
+				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde ZARARLI (web shell imzalı) PHP dosyası: ' . $ad . ' — derhal kaldırın.', 'kritik' );
+			} else {
+				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde beklenmeyen PHP dosyası: ' . $ad . ' (meşru bir dosyaysa yok sayabilirsiniz).', 'kritik' );
 			}
 		}
+	}
+
+	/**
+	 * Zararlı bir dosyayı ÇALIŞTIRILAMAZ hale getirir: uploads altındaki, tüm
+	 * erişime kapalı "wpgk-karantina" klasörüne, .php OLMAYAN bir adla (.txt) taşır.
+	 * Böylece adli inceleme için içerik korunur ama dosya artık sunucuda yürütülemez.
+	 * rename başarısızsa içeriği kopyalar ve orijinali zararsız bir stub ile ezer.
+	 *
+	 * @return bool Başarılıysa true.
+	 */
+	protected static function karantinaya_al( $yol ) {
+		if ( ! is_file( $yol ) || ! is_readable( $yol ) ) {
+			return false;
+		}
+		$upload = wp_get_upload_dir();
+		if ( empty( $upload['basedir'] ) ) {
+			return false;
+		}
+		$kdir = trailingslashit( $upload['basedir'] ) . 'wpgk-karantina';
+		if ( ! is_dir( $kdir ) && ! wp_mkdir_p( $kdir ) ) {
+			return false;
+		}
+		// Karantina klasöründe her türlü erişimi/çalıştırmayı/listelemeyi engelle.
+		if ( ! file_exists( $kdir . '/.htaccess' ) ) {
+			@file_put_contents( $kdir . '/.htaccess', "Require all denied\nDeny from all\nOptions -Indexes\n" );
+		}
+		if ( ! file_exists( $kdir . '/index.php' ) ) {
+			@file_put_contents( $kdir . '/index.php', "<?php // Silence is golden.\n" );
+		}
+
+		$damga = gmdate( 'Ymd-His' );
+		$hedef = $kdir . '/' . $damga . '-' . basename( $yol ) . '.karantina.txt';
+
+		$tasindi = @rename( $yol, $hedef );
+		if ( ! $tasindi ) {
+			// rename başarısız (izin/farklı disk): içeriği kopyala, orijinali etkisizleştir.
+			$icerik = @file_get_contents( $yol );
+			if ( false !== $icerik && false !== @file_put_contents( $hedef, $icerik ) ) {
+				$stub    = '<?php /* WP Radar: bu dosya ' . $damga . ' tarihinde karantinaya alındı. */' . "\n";
+				$tasindi = ( false !== @file_put_contents( $yol, $stub ) );
+			}
+		}
+		if ( $tasindi ) {
+			@chmod( $hedef, 0400 );
+		}
+		return (bool) $tasindi;
 	}
 
 	/**
@@ -304,6 +353,12 @@ class WPGK_File_Guard {
 			$uzanti = strtolower( $dosya->getExtension() );
 			$ad     = strtolower( $dosya->getFilename() );
 			$yol    = $dosya->getPathname();
+
+			// 0a) WP Radar karantina klasörünü atla: içindeki dosyalar zaten
+			//     etkisizleştirilmiştir; yeniden alarm üretmesi gürültü olur.
+			if ( false !== strpos( str_replace( '\\', '/', $yol ), '/wpgk-karantina/' ) ) {
+				continue;
+			}
 
 			// 0) Meşru koruma/guard dosyalarını atla: boş "silence" index.php.
 			if ( self::guvenli_koruma_dosyasi( $dosya, $uzanti, $ad ) ) {

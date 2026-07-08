@@ -202,15 +202,56 @@ class WPGK_User_Guard {
 
 		$adminler  = get_users( array( 'role' => 'administrator', 'fields' => array( 'ID', 'user_login' ) ) );
 		$guvenilir = self::guvenilir_adminler();
+		$otomatik  = ! empty( $ayarlar['sahte_admin_otomatik'] );
+
+		// Güvenlik kilidi: listede HÂLÂ en az bir güvenilir admin mevcut olmalı ki
+		// otomatik düşürme meşru yöneticileri kilitlemesin. Aksi halde yalnızca raporla.
+		$mevcut_guvenilir = 0;
+		foreach ( $adminler as $a ) {
+			if ( in_array( (int) $a->ID, $guvenilir, true ) ) {
+				$mevcut_guvenilir++;
+			}
+		}
 
 		foreach ( $adminler as $admin ) {
-			if ( ! in_array( (int) $admin->ID, $guvenilir, true ) ) {
+			if ( in_array( (int) $admin->ID, $guvenilir, true ) ) {
+				continue;
+			}
+
+			if ( $otomatik && $mevcut_guvenilir > 0 ) {
+				$this->admin_etkisizlestir( (int) $admin->ID );
+				WPGK_Logger::kaydet(
+					'kullanici',
+					'sahte_admin_etkisizlestirildi',
+					sprintf( 'Yetkisiz yönetici etkisizleştirildi (subscriber\'a düşürüldü + tüm oturumları sonlandırıldı): %s (ID %d).', $admin->user_login, $admin->ID ),
+					'kritik'
+				);
+			} else {
 				WPGK_Logger::kaydet(
 					'kullanici',
 					'tespit_sahte_admin',
 					sprintf( 'Güvenilir listede olmayan yönetici tespit edildi: %s (ID %d). Lütfen inceleyin.', $admin->user_login, $admin->ID ),
 					'kritik'
 				);
+			}
+		}
+	}
+
+	/**
+	 * Bir kullanıcıyı etkisizleştirir: rolünü subscriber'a düşürür ve tüm oturum
+	 * jetonlarını yok eder; böylece saldırganın açık oturumu anında geçersiz olur.
+	 */
+	protected function admin_etkisizlestir( $user_id ) {
+		$user = get_userdata( $user_id );
+		if ( ! $user ) {
+			return;
+		}
+		// 'subscriber' administrator olmadığından set_user_role kancasında döngü oluşmaz.
+		$user->set_role( 'subscriber' );
+		if ( class_exists( 'WP_Session_Tokens' ) ) {
+			$oturumlar = WP_Session_Tokens::get_instance( $user_id );
+			if ( $oturumlar ) {
+				$oturumlar->destroy_all();
 			}
 		}
 	}
