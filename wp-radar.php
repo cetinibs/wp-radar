@@ -3,7 +3,7 @@
  * Plugin Name:       CK Radar Security
  * Plugin URI:        https://github.com/cetinibs/wp-radar
  * Description:        Comprehensive WordPress security: brute-force/login protection, security headers and hardening, core file integrity, exploit/intrusion blocking, unauthorized user and root-folder detection, and malicious link / SEO-spam cleanup.
- * Version:           2.7.0
+ * Version:           2.8.0
  * Requires at least: 5.0
  * Requires PHP:      7.0
  * Author:            Çetin Kaya
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Doğrudan erişim engellendi.
 }
 
-define( 'WPGK_VERSION', '2.7.0' );
+define( 'WPGK_VERSION', '2.8.0' );
 define( 'WPGK_FILE', __FILE__ );
 define( 'WPGK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPGK_URL', plugin_dir_url( __FILE__ ) );
@@ -61,6 +61,10 @@ function wpgk_varsayilan_ayarlar() {
 		// İmza tabanlı olduğundan yanlış-pozitif riski düşük → varsayılan AÇIK.
 		'root_php_otomatik'       => 1,
 		'icerik_korumasi'         => 1,
+		// Yayındaki spam/doorway içeriği (yazı/sayfa/ürün) otomatik taslağa al.
+		// Kanıt kuralı (spam kelime + link, gizli link veya spam başlık) FP riskini
+		// düşük tuttuğundan varsayılan AÇIK.
+		'spam_icerik_otomatik'    => 1,
 		'exploit_korumasi'        => 1,
 		'dosya_duzenleme_kapat'   => 1,
 		'xmlrpc_kapat'            => 1,

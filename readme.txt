@@ -4,7 +4,7 @@ Tags: security, firewall, malware, brute force, hardening
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.0
-Stable tag: 2.7.0
+Stable tag: 2.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,14 @@ No. Content from trusted administrators is never blocked, only logged.
 * Root-folder protection automatically cleans spam folders, BUT if those folders are recreated repeatedly by a backdoor/web shell, the real issue is the backdoor. Inspect log entries, clean suspicious files, change all passwords, and update plugins/themes.
 
 == Changelog ==
+
+= 2.8.0 =
+* Parasite-SEO / gambling-spam ("slot gacor") response — built from a real incident where injected Indonesian gambling products and a hijacked contact link were served on a production site:
+* Indonesian gambling (judi) keyword set added to content protection: gacor, maxwin, judi, togel, situs/agen/bandar/daftar/bocoran/pusat slot, rtp slot, gampang jp/menang/pecah, link alternatif, deposit pulsa, taruhan bola, sabung ayam, slot88, toto macau, and more.
+* Published-content spam scan now covers ALL public post types (WooCommerce products and other custom types included, not just posts/pages), also inspects the TITLE (a spam title alone is sufficient evidence — doorway pages like "HIBIKIWIN slot gacor" are caught even without links), scans 500 most-recently-modified items, and runs hourly as well as daily.
+* Spam auto-unpublish (default ON): content matching the evidence rule (spam keyword + link, hidden link, or spam title) is automatically reverted to draft and logged as yayinda_spam_taslaga_alindi. Trusted-admin content is never touched by the save-time filter.
+* Navigation menus are now passed through the malicious-link cleaner at render time — a menu item (e.g. "Contact") whose URL was swapped to a malicious site is stripped while its label is preserved.
+* Site-address hijack protection: unauthorized changes to the home / siteurl options (a common redirect-hijack) are blocked and logged as site_adresi_kacirma; only trusted administrators (or WP-CLI) may change them.
 
 = 2.7.0 =
 * Active response, upgraded from passive detection. Recurring root-directory backdoors (e.g. default.php) and database-injected rogue administrators previously produced only log/email alerts; they can now be neutralized automatically.

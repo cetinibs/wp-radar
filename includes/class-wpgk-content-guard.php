@@ -29,6 +29,13 @@ class WPGK_Content_Guard {
 			'casino', 'kumar', 'bahis', 'bet', 'betting', 'slot', 'rulet', 'poker',
 			'iddaa', 'jackpot', 'gambling', 'deneme bonusu', 'bonus veren',
 			'guvenilir bahis', 'canli casino', 'bahis siteleri', 'sweet bonanza',
+			// Endonezya kumar (judi) spam'i — parasite-SEO enjeksiyonlarında çok yaygın
+			// ("slot gacor" doorway sayfaları/ürünleri).
+			'gacor', 'maxwin', 'judi', 'togel', 'situs slot', 'slot gacor',
+			'rtp slot', 'rtp tinggi', 'gampang jp', 'gampang menang', 'gampang pecah',
+			'daftar slot', 'agen slot', 'bandar slot', 'bocoran slot', 'pusat slot',
+			'link alternatif', 'deposit pulsa', 'judi online', 'taruhan bola',
+			'sabung ayam', 'slot online', 'slot88', 'toto macau', 'bet 100',
 			// Yetişkin / porno
 			'porno', 'porn', 'sex', 'seks', 'xxx', 'escort', 'hentai',
 			'viagra', 'cialis', 'erotik', 'sikis', 'adult',
@@ -56,8 +63,16 @@ class WPGK_Content_Guard {
 		add_filter( 'pre_update_option_blogname', array( $this, 'secenek_denetle' ), 10, 2 );
 		add_filter( 'pre_update_option_blogdescription', array( $this, 'secenek_denetle' ), 10, 2 );
 
-		// Sızıntı sonrası gizli/spam link enjeksiyonu için günlük tarama.
+		// Site adresi kaçırma koruması: siteurl/home ancak güvenilir admin
+		// tarafından değiştirilebilir (saldırganlar ziyaretçiyi zararlı siteye
+		// yönlendirmek için bu seçenekleri hedefler).
+		add_filter( 'pre_update_option_home', array( $this, 'site_adresi_koru' ), 10, 2 );
+		add_filter( 'pre_update_option_siteurl', array( $this, 'site_adresi_koru' ), 10, 2 );
+
+		// Sızıntı sonrası gizli/spam link enjeksiyonu için günlük + saatlik tarama
+		// (saatlik: enjekte edilen doorway içerik yayında uzun süre kalmasın).
 		add_action( 'wpgk_gunluk_tarama', array( $this, 'gizli_link_tara' ) );
+		add_action( 'wpgk_saatlik_tarama', array( $this, 'gizli_link_tara' ) );
 
 		// Render anında zararlı link otomatik engelleme (DB'de zaten enjekte
 		// edilmiş linkler ön yüzde gösterilmez).
@@ -66,6 +81,29 @@ class WPGK_Content_Guard {
 		add_filter( 'comment_text', array( $this, 'render_link_temizle' ), 99 );
 		add_filter( 'widget_text', array( $this, 'render_link_temizle' ), 99 );
 		add_filter( 'widget_block_content', array( $this, 'render_link_temizle' ), 99 );
+		// Navigasyon menüsü de temizlenir: saldırganlar "İletişim" gibi menü
+		// öğelerinin adresini zararlı siteye çevirebilir.
+		add_filter( 'wp_nav_menu_items', array( $this, 'render_link_temizle' ), 99 );
+	}
+
+	/**
+	 * siteurl/home değişikliğini yalnızca güvenilir admin (veya WP-CLI) yapabilir.
+	 * Aksi durumda eski değer korunur ve kritik olay loglanır.
+	 */
+	public function site_adresi_koru( $yeni, $eski ) {
+		$ayarlar = get_option( 'wpgk_ayarlar', array() );
+		if ( empty( $ayarlar['icerik_korumasi'] ) || $yeni === $eski ) {
+			return $yeni;
+		}
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			return $yeni; // Shell erişimi gerektirir; güvenilir bağlam.
+		}
+		if ( $this->guvenilir_admin_mi() ) {
+			WPGK_Logger::kaydet( 'icerik', 'site_adresi_degisti', sprintf( 'Site adresi güvenilir admin tarafından değiştirildi: %s → %s', $eski, $yeni ), 'uyari' );
+			return $yeni;
+		}
+		WPGK_Logger::kaydet( 'icerik', 'site_adresi_kacirma', sprintf( 'YETKİSİZ site adresi değişikliği engellendi (yönlendirme kaçırma girişimi): %s → %s', $eski, $yeni ), 'kritik' );
+		return $eski;
 	}
 
 	/**
@@ -338,6 +376,12 @@ class WPGK_Content_Guard {
 
 	/**
 	 * Yayınlanmış içerikte gizli/spam linklerini tara (sızma sonrası tespit).
+	 *
+	 * TÜM herkese açık içerik tiplerini kapsar (yazı, sayfa, ürün ve diğer özel
+	 * tipler): parasite-SEO saldırıları spam'i çoğunlukla WooCommerce ürünü veya
+	 * özel içerik tipi olarak enjekte eder. Başlık da denetlenir ("HIBIKIWIN slot
+	 * gacor" gibi doorway başlıkları). Ayar açıksa tespit edilen içerik otomatik
+	 * olarak yayından kaldırılıp taslağa alınır.
 	 */
 	public function gizli_link_tara() {
 		$ayarlar = get_option( 'wpgk_ayarlar', array() );
@@ -345,25 +389,50 @@ class WPGK_Content_Guard {
 			return;
 		}
 
+		$otomatik = ! empty( $ayarlar['spam_icerik_otomatik'] );
+
+		// attachment hariç tüm herkese açık içerik tipleri (product vb. dahil).
+		$tipler = get_post_types( array( 'public' => true ), 'names' );
+		unset( $tipler['attachment'] );
+		if ( empty( $tipler ) ) {
+			$tipler = array( 'post', 'page' );
+		}
+
 		$yazilar = get_posts( array(
-			'post_type'      => array( 'post', 'page' ),
+			'post_type'      => array_values( $tipler ),
 			'post_status'    => 'publish',
-			'posts_per_page' => 200,
+			'posts_per_page' => 500,
 			'orderby'        => 'modified',
 			'order'          => 'DESC',
 		) );
 
 		foreach ( $yazilar as $yazi ) {
-			$eslesme = '';
-			$spam    = $this->spam_iceriyor_mu( $yazi->post_content, $eslesme );
-			$link    = $this->link_iceriyor_mu( $yazi->post_content );
-			$gizli   = $this->gizli_link_iceriyor_mu( $yazi->post_content );
+			$birlesik = $yazi->post_title . ' ' . $yazi->post_content;
+			$eslesme  = '';
+			$spam     = $this->spam_iceriyor_mu( $birlesik, $eslesme );
+			$link     = $this->link_iceriyor_mu( $yazi->post_content );
+			$gizli    = $this->gizli_link_iceriyor_mu( $yazi->post_content );
+			// Başlıkta spam kalıbı varsa link şartı aranmaz: doorway başlıkları
+			// ("... slot gacor ...") tek başına yeterli kanıttır.
+			$baslik_spam = '' !== $yazi->post_title && $this->spam_iceriyor_mu( $yazi->post_title, $eslesme );
 
-			if ( ( $spam && $link ) || $gizli ) {
+			if ( ! ( ( $spam && $link ) || $gizli || $baslik_spam ) ) {
+				continue;
+			}
+
+			if ( $otomatik ) {
+				wp_update_post( array( 'ID' => $yazi->ID, 'post_status' => 'draft' ) );
+				WPGK_Logger::kaydet(
+					'icerik',
+					'yayinda_spam_taslaga_alindi',
+					sprintf( 'Yayındaki spam içerik OTOMATİK yayından kaldırıldı (taslak yapıldı): "%s" (ID %d, tip %s). Kalıp: %s', $yazi->post_title, $yazi->ID, $yazi->post_type, $gizli ? 'gizli link' : $eslesme ),
+					'kritik'
+				);
+			} else {
 				WPGK_Logger::kaydet(
 					'icerik',
 					'yayinda_spam_tespit',
-					sprintf( 'Yayındaki içerikte spam link tespit edildi: "%s" (ID %d). Kalıp: %s', $yazi->post_title, $yazi->ID, $gizli ? 'gizli link' : $eslesme ),
+					sprintf( 'Yayındaki içerikte spam tespit edildi: "%s" (ID %d, tip %s). Kalıp: %s', $yazi->post_title, $yazi->ID, $yazi->post_type, $gizli ? 'gizli link' : $eslesme ),
 					'kritik'
 				);
 			}

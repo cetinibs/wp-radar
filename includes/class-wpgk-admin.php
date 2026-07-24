@@ -206,6 +206,7 @@ class WPGK_Admin {
 			'dosya_korumasi'        => isset( $_POST['dosya_korumasi'] ) ? 1 : 0,
 			'root_php_otomatik'     => isset( $_POST['root_php_otomatik'] ) ? 1 : 0,
 			'icerik_korumasi'       => isset( $_POST['icerik_korumasi'] ) ? 1 : 0,
+			'spam_icerik_otomatik'  => isset( $_POST['spam_icerik_otomatik'] ) ? 1 : 0,
 			'exploit_korumasi'      => isset( $_POST['exploit_korumasi'] ) ? 1 : 0,
 			'dosya_duzenleme_kapat' => isset( $_POST['dosya_duzenleme_kapat'] ) ? 1 : 0,
 			'xmlrpc_kapat'          => isset( $_POST['xmlrpc_kapat'] ) ? 1 : 0,
@@ -298,6 +299,7 @@ class WPGK_Admin {
 			'root_php_otomatik'     => 'Root dizinindeki backdoor PHP dosyalarını otomatik karantinaya al (yalnızca web shell imzalı olanlar)',
 			'dosya_korumasi'        => 'Dosya koruması (root/uploads içine shell & PHP yazımını engelle)',
 			'icerik_korumasi'       => 'İçerik koruması (porno/kumar/oyun spam linklerini engelle)',
+			'spam_icerik_otomatik'  => 'Yayındaki spam/doorway içeriği otomatik yayından kaldır (yazı/sayfa/ürün → taslak; "slot gacor" tipi enjeksiyonlar)',
 			'exploit_korumasi'      => 'Exploit koruması (zafiyetli istek ve sızma denemelerini engelle)',
 			'kotu_bot_engelle'      => 'Kötü bot / tarama aracı engelleme (sqlmap, nikto, wpscan vb.)',
 			'giris_korumasi'        => 'Giriş koruması (brute-force / IP bazlı kilitleme)',
@@ -326,7 +328,7 @@ class WPGK_Admin {
 			'Ağ & İstek (Firewall)'    => array( 'exploit_korumasi', 'kotu_bot_engelle', 'xmlrpc_kapat', 'xmlrpc_tam_engel', 'pingback_kapat', 'sitemap_kullanici_gizle' ),
 			'Dosya & Sistem'           => array( 'dosya_korumasi', 'root_php_otomatik', 'dosya_duzenleme_kapat', 'cekirdek_butunluk', 'yapi_korumasi', 'kok_klasor_korumasi', 'kok_klasor_otomatik_sil', 'hassas_dosya_koru', 'dizin_listeleme_kapat' ),
 			'Sertleştirme (Hardening)' => array( 'guvenlik_basliklari', 'surum_gizle', 'hsts', 'hsts_preload' ),
-			'İçerik'                   => array( 'icerik_korumasi', 'link_korumasi' ),
+			'İçerik'                   => array( 'icerik_korumasi', 'spam_icerik_otomatik', 'link_korumasi' ),
 		);
 
 		// Pano metrikleri.
