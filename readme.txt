@@ -4,7 +4,7 @@ Tags: security, firewall, malware, brute force, hardening
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.0
-Stable tag: 2.8.0
+Stable tag: 2.8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,10 @@ No. Content from trusted administrators is never blocked, only logged.
 * Root-folder protection automatically cleans spam folders, BUT if those folders are recreated repeatedly by a backdoor/web shell, the real issue is the backdoor. Inspect log entries, clean suspicious files, change all passwords, and update plugins/themes.
 
 == Changelog ==
+
+= 2.8.1 =
+* False-positive fix: the uploads .htaccess check is now DIRECTION-AWARE. Protective directives that DISABLE PHP — "RemoveHandler .php", "php_flag engine off", "SetHandler none/default-handler" (shipped intentionally by WPForms, WooCommerce, and others) — are no longer flagged as dangerous. Only directives that ENABLE PHP execution (AddHandler/AddType/SetHandler with a PHP handler, "php_flag engine on", auto_prepend/append_file, allow_url_include on) or embedded code/obfuscation still trigger the uploads_htaccess_tehlikeli alert. Comment lines are ignored.
+* Noise reduction: an unexpected root .php file WITHOUT a backdoor behavior signature (e.g. a hosting placeholder such as Hostinger's default.php) is now logged as a warning instead of critical, so it no longer sends an email every scan. Files WITH a web-shell signature remain critical and are still auto-quarantined when enabled.
 
 = 2.8.0 =
 * Parasite-SEO / gambling-spam ("slot gacor") response — built from a real incident where injected Indonesian gambling products and a hijacked contact link were served on a production site:

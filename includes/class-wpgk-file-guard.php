@@ -210,7 +210,10 @@ class WPGK_File_Guard {
 			} elseif ( $zararli ) {
 				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde ZARARLI (web shell imzalı) PHP dosyası: ' . $ad . ' — derhal kaldırın.', 'kritik' );
 			} else {
-				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde beklenmeyen PHP dosyası: ' . $ad . ' (meşru bir dosyaysa yok sayabilirsiniz).', 'kritik' );
+				// Backdoor davranış imzası YOK: hosting yer tutucusu (ör. Hostinger'ın
+				// default.php'si) veya meşru özel dosya olabilir. Kritik e-posta
+				// göndermek gürültü üretir; "uyari" olarak logla, incelemeye bırak.
+				WPGK_Logger::kaydet( 'dosya', 'supheli_root_php', 'Root dizininde beklenmeyen PHP dosyası: ' . $ad . ' (backdoor imzası bulunamadı; hosting yer tutucusu veya meşru dosya olabilir, inceleyin).', 'uyari' );
 			}
 		}
 	}
@@ -379,7 +382,7 @@ class WPGK_File_Guard {
 			//    Aksi halde (deny/koruma kuralları) bu bir güvenlik dosyasıdır, atlanır.
 			if ( 'htaccess' === $uzanti || '.htaccess' === $ad ) {
 				$icerik = @file_get_contents( $yol, false, null, 0, 8192 );
-				if ( false !== $icerik && preg_match( '/(AddHandler|SetHandler|AddType)[^\r\n]*(php|x-httpd)|php_(value|flag|admin_value|admin_flag)|application\/x-httpd-php|RemoveHandler[^\r\n]*php/i', $icerik ) ) {
+				if ( false !== $icerik && self::htaccess_php_aciyor_mu( $icerik ) ) {
 					WPGK_Logger::kaydet( 'dosya', 'uploads_htaccess_tehlikeli', 'uploads içinde PHP çalıştırmayı etkinleştiren .htaccess: ' . $yol, 'kritik' );
 				}
 				continue;
@@ -408,6 +411,44 @@ class WPGK_File_Guard {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Bir .htaccess içeriğinin PHP ÇALIŞTIRMAYI ETKİNLEŞTİRİP etkinleştirmediğine
+	 * YÖN DUYARLI karar verir.
+	 *
+	 * Koruyucu direktifler tehlikeli DEĞİLDİR ve birçok eklenti (WPForms,
+	 * WooCommerce vb.) bunları uploads alt klasörlerine bilerek koyar:
+	 *   RemoveHandler .php ...      → PHP handler'ını KALDIRIR (koruma)
+	 *   php_flag engine off         → PHP motorunu KAPATIR (koruma)
+	 *   SetHandler none/default-handler, Options -ExecCGI → koruma
+	 *
+	 * Tehlikeli olanlar yalnızca PHP yürütmeyi AÇAN yönlü direktiflerdir.
+	 *
+	 * @return bool Tehlikeliyse true.
+	 */
+	protected static function htaccess_php_aciyor_mu( $icerik ) {
+		foreach ( preg_split( '/\r\n|\r|\n/', (string) $icerik ) as $satir ) {
+			$satir = trim( $satir );
+			if ( '' === $satir || '#' === $satir[0] ) {
+				continue; // Boş satır ve yorumları atla.
+			}
+			// 1) PHP handler'ı EKLEYEN direktif (RemoveHandler değil).
+			if ( preg_match( '/^(AddHandler|AddType|SetHandler)\b/i', $satir )
+				&& preg_match( '/x-httpd|application\/x-httpd-php|\bphp\d?\b|\.php\b|\bphtml\b/i', $satir ) ) {
+				return true;
+			}
+			// 2) PHP motorunu AÇAN veya her isteğe dosya enjekte eden php_* direktifi.
+			if ( preg_match( '/^php_(flag|value|admin_flag|admin_value)\b/i', $satir )
+				&& preg_match( '/engine\s+on|auto_(prepend|append)_file|allow_url_include\s+on/i', $satir ) ) {
+				return true;
+			}
+			// 3) .htaccess içine gömülü kod / gizleme (hiçbir meşru senaryosu yok).
+			if ( preg_match( '/<\?php|<\?=|base64_decode\s*\(|eval\s*\(/i', $satir ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

@@ -4,7 +4,7 @@
 
 ### All-in-one WordPress security — firewall, malware & integrity scanning, login hardening, and instant alerts.
 
-[![Version](https://img.shields.io/badge/version-2.8.0-2271b1.svg?style=flat-square)](https://github.com/cetinibs/wp-radar/releases)
+[![Version](https://img.shields.io/badge/version-2.8.1-2271b1.svg?style=flat-square)](https://github.com/cetinibs/wp-radar/releases)
 [![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-21759b.svg?style=flat-square&logo=wordpress&logoColor=white)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-7.0%2B-777bb4.svg?style=flat-square&logo=php&logoColor=white)](https://www.php.net/)
 [![License](https://img.shields.io/badge/license-GPL--2.0-2ea44f.svg?style=flat-square)](LICENSE)
