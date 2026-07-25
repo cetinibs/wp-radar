@@ -59,6 +59,11 @@ class WPGK_File_Guard {
 	 * Yönetici panel yüklemesinde kök klasörü tara (10 dakikada bir, performans için).
 	 */
 	public function admin_kok_tara() {
+		// Yetki kontrolü: admin_init her oturum açmış kullanıcı için (abone dahil)
+		// çalışır. Tarama + karantina eylemini yalnızca yöneticiler tetikleyebilir.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
 		if ( get_transient( 'wpgk_kok_tara_kilit' ) ) {
 			return;
 		}
@@ -230,20 +235,18 @@ class WPGK_File_Guard {
 		if ( ! is_file( $yol ) || ! is_readable( $yol ) ) {
 			return false;
 		}
-		$upload = wp_get_upload_dir();
-		if ( empty( $upload['basedir'] ) ) {
+		// SYMLINK GÜVENLİĞİ: $yol bir sembolik bağsa, rename başarısız olduğunda
+		// devreye giren file_put_contents() fallback'i bağı TAKİP EDEREK hedef
+		// dosyanın içeriğini stub ile ezerdi. Bağları asla karantinaya almayız;
+		// yalnızca raporlanır.
+		if ( is_link( $yol ) ) {
+			WPGK_Logger::kaydet( 'dosya', 'karantina_atlandi_symlink', 'Sembolik bağ karantinaya alınmadı (hedef dosyayı bozabilir): ' . $yol, 'uyari' );
 			return false;
 		}
-		$kdir = trailingslashit( $upload['basedir'] ) . 'wpgk-karantina';
-		if ( ! is_dir( $kdir ) && ! wp_mkdir_p( $kdir ) ) {
+
+		$kdir = self::karantina_dizini();
+		if ( '' === $kdir ) {
 			return false;
-		}
-		// Karantina klasöründe her türlü erişimi/çalıştırmayı/listelemeyi engelle.
-		if ( ! file_exists( $kdir . '/.htaccess' ) ) {
-			@file_put_contents( $kdir . '/.htaccess', "Require all denied\nDeny from all\nOptions -Indexes\n" );
-		}
-		if ( ! file_exists( $kdir . '/index.php' ) ) {
-			@file_put_contents( $kdir . '/index.php', "<?php // Silence is golden.\n" );
 		}
 
 		$damga = gmdate( 'Ymd-His' );
@@ -262,6 +265,30 @@ class WPGK_File_Guard {
 			@chmod( $hedef, 0400 );
 		}
 		return (bool) $tasindi;
+	}
+
+	/**
+	 * Karantina dizinini (uploads/wpgk-karantina) hazırlar ve yolunu döndürür.
+	 * Klasör içinde her türlü web erişimi, çalıştırma ve listeleme engellenir.
+	 *
+	 * @return string Hazır dizin yolu; hata durumunda boş string.
+	 */
+	protected static function karantina_dizini() {
+		$upload = wp_get_upload_dir();
+		if ( empty( $upload['basedir'] ) ) {
+			return '';
+		}
+		$kdir = trailingslashit( $upload['basedir'] ) . 'wpgk-karantina';
+		if ( ! is_dir( $kdir ) && ! wp_mkdir_p( $kdir ) ) {
+			return '';
+		}
+		if ( ! file_exists( $kdir . '/.htaccess' ) ) {
+			@file_put_contents( $kdir . '/.htaccess', "Require all denied\nDeny from all\nOptions -Indexes\n" );
+		}
+		if ( ! file_exists( $kdir . '/index.php' ) ) {
+			@file_put_contents( $kdir . '/index.php', "<?php // Silence is golden.\n" );
+		}
+		return $kdir;
 	}
 
 	/**
@@ -537,7 +564,8 @@ class WPGK_File_Guard {
 				continue; // . .. ve gizli sistem klasörlerini atla.
 			}
 			$tam = $kok . DIRECTORY_SEPARATOR . $ad;
-			if ( ! is_dir( $tam ) || in_array( $ad, $izinli, true ) ) {
+			// Sembolik bağları asla tarama/silme hedefi yapma (kaçış riski).
+			if ( ! is_dir( $tam ) || is_link( $tam ) || in_array( $ad, $izinli, true ) ) {
 				continue;
 			}
 
@@ -545,10 +573,14 @@ class WPGK_File_Guard {
 			$analiz = self::klasor_zararli_mi( $tam, $ad );
 
 			if ( $analiz['zararli'] ) {
-				// 2) ADIM: ENGELLE — yalnızca kanıtlı zararlı klasörü sil.
-				if ( $otomatik && self::klasor_sil( $tam ) ) {
-					WPGK_Logger::kaydet( 'dosya', 'kok_spam_klasor_silindi', sprintf( 'Zararlı kök klasör silindi: /%s — %s', $ad, $analiz['neden'] ), 'kritik' );
-					$bulgular[] = array( 'klasor' => $ad, 'durum' => 'silindi', 'neden' => $analiz['neden'] );
+				// 2) ADIM: ETKİSİZLEŞTİR — kalıcı SİLME yerine KARANTİNA.
+				// Kalıcı özyinelemeli silme, yanlış pozitifte geri dönüşü olmayan
+				// veri kaybı demekti (ör. sitenin meşru "/page" ya da "/2024"
+				// klasörü ad kalıbına takılabilir). Karantina hem spam'i web
+				// kökünden çıkarır hem de geri almayı mümkün kılar.
+				if ( $otomatik && self::klasor_karantinaya_al( $tam ) ) {
+					WPGK_Logger::kaydet( 'dosya', 'kok_spam_klasor_karantina', sprintf( 'Zararlı kök klasör karantinaya alındı (uploads/wpgk-karantina): /%s — %s', $ad, $analiz['neden'] ), 'kritik' );
+					$bulgular[] = array( 'klasor' => $ad, 'durum' => 'karantina', 'neden' => $analiz['neden'] );
 				} else {
 					WPGK_Logger::kaydet( 'dosya', 'kok_spam_klasor_tespit', sprintf( 'Zararlı kök klasör tespit edildi: /%s — %s', $ad, $analiz['neden'] ), 'kritik' );
 					$bulgular[] = array( 'klasor' => $ad, 'durum' => 'tespit', 'neden' => $analiz['neden'] );
@@ -732,22 +764,84 @@ class WPGK_File_Guard {
 			return false;
 		}
 
-		try {
-			$iter = new RecursiveIteratorIterator(
-				new RecursiveDirectoryIterator( $gercek, FilesystemIterator::SKIP_DOTS ),
-				RecursiveIteratorIterator::CHILD_FIRST
-			);
-			foreach ( $iter as $oge ) {
-				if ( $oge->isDir() ) {
-					@rmdir( $oge->getPathname() );
-				} else {
-					@unlink( $oge->getPathname() );
-				}
-			}
-		} catch ( Exception $e ) {
+		// SYMLINK GÜVENLİĞİ: RecursiveDirectoryIterator, sembolik bağ olan alt
+		// klasörlerin İÇİNE girer. Saldırganın klasöre koyduğu bir symlink
+		// (ör. /category/x -> /home/user) özyinelemeli silmenin klasör dışına
+		// taşmasına ve sunucudaki başka dosyaların silinmesine yol açabilirdi.
+		// Bu nedenle bağları takip etmeyen kendi özyinelememizi kullanıyoruz.
+		if ( ! self::icerigi_sil( $gercek ) ) {
 			return false;
 		}
 
 		return @rmdir( $gercek );
+	}
+
+	/**
+	 * Bir klasörün içeriğini sembolik bağları TAKİP ETMEDEN özyinelemeli siler.
+	 * Bağlar yalnızca bağın kendisi olarak kaldırılır (hedefine dokunulmaz).
+	 *
+	 * @return bool
+	 */
+	protected static function icerigi_sil( $dizin, $derinlik = 0 ) {
+		if ( $derinlik > 32 ) {
+			return false; // Aşırı derinlik / döngü koruması.
+		}
+		$girisler = @scandir( $dizin );
+		if ( false === $girisler ) {
+			return false;
+		}
+		foreach ( $girisler as $ad ) {
+			if ( '.' === $ad || '..' === $ad ) {
+				continue;
+			}
+			$yol = $dizin . DIRECTORY_SEPARATOR . $ad;
+
+			// Sembolik bağ: İÇİNE GİRMEDEN yalnızca bağı kaldır.
+			if ( is_link( $yol ) ) {
+				if ( ! @unlink( $yol ) ) {
+					@rmdir( $yol ); // Windows'ta dizin bağları rmdir ile kaldırılır.
+				}
+				continue;
+			}
+			if ( is_dir( $yol ) ) {
+				self::icerigi_sil( $yol, $derinlik + 1 );
+				@rmdir( $yol );
+			} else {
+				@unlink( $yol );
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Zararlı bir KÖK KLASÖRÜ kalıcı olarak silmek yerine karantinaya taşır.
+	 *
+	 * Neden: kalıcı özyinelemeli silme, yanlış pozitifte geri dönüşü olmayan veri
+	 * kaybı demektir (ör. sitenin meşru "/page" veya "/2024" klasörü). Tek bir
+	 * rename() ile klasör web kökünden çıkarılır (spam artık sunulmaz) ama
+	 * uploads altındaki, erişimi tamamen kapalı karantina klasöründe saklanır.
+	 *
+	 * @return bool Başarılıysa true.
+	 */
+	protected static function klasor_karantinaya_al( $hedef ) {
+		$kok    = realpath( untrailingslashit( ABSPATH ) );
+		$gercek = realpath( $hedef );
+		if ( false === $kok || false === $gercek || ! is_dir( $gercek ) ) {
+			return false;
+		}
+		// Yalnızca ABSPATH'in DOĞRUDAN alt klasörü (symlink/üst dizin kaçışı engeli).
+		if ( dirname( $gercek ) !== $kok ) {
+			return false;
+		}
+		if ( in_array( basename( $gercek ), array( 'wp-admin', 'wp-content', 'wp-includes' ), true ) ) {
+			return false;
+		}
+
+		$kdir = self::karantina_dizini();
+		if ( '' === $kdir ) {
+			return false;
+		}
+		$hedef_yol = $kdir . '/' . gmdate( 'Ymd-His' ) . '-klasor-' . basename( $gercek );
+		return @rename( $gercek, $hedef_yol );
 	}
 }

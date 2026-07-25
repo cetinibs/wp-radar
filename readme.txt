@@ -4,7 +4,7 @@ Tags: security, firewall, malware, brute force, hardening
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.0
-Stable tag: 2.8.1
+Stable tag: 2.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,22 @@ No. Content from trusted administrators is never blocked, only logged.
 * Root-folder protection automatically cleans spam folders, BUT if those folders are recreated repeatedly by a backdoor/web shell, the real issue is the backdoor. Inspect log entries, clean suspicious files, change all passwords, and update plugins/themes.
 
 == Changelog ==
+
+= 2.9.0 =
+* SECURITY HARDENING OF THE PLUGIN ITSELF, following a full audit against the ersinkoc/security-check framework (48 categories; 5 parallel expert passes). Injection (SQLi/XSS/CRLF), code execution (eval/deserialization/LFI), CSRF/nonce coverage, and open redirects came back clean; the fixes below address the real findings.
+* IP-spoofing bypass fixed (HIGH). Client IP resolution trusted X-Forwarded-For / CF-Connecting-IP whenever "proxy trust" was on — and it shipped ON by default. An attacker could rotate a forged header to evade brute-force lockout, rate limiting, and behavioral auto-block entirely, or forge a victim's IP to get an innocent visitor (or the admin) blocked. Proxy trust now defaults to OFF, and even when enabled the headers are only honored if REMOTE_ADDR is verified against known Cloudflare edge ranges (extensible via the wpgk_guvenilir_proxyler filter).
+* Brute-force counter race condition fixed (HIGH). Login, rate-limit, and behavioral counters used a get_transient -> increment -> set_transient pattern, a read-modify-write race: N concurrent attempts could all read the same value and register as one, letting parallel request bursts blow past the lockout threshold. Counters now use a dedicated table with an atomic MySQL "INSERT ... ON DUPLICATE KEY UPDATE" (with a transient fallback), plus daily pruning of expired rows.
+* Destructive-scan safety fixed (HIGH). Recursive folder deletion followed symlinks, so a symlink planted inside a flagged spam folder could make the delete escape and remove files elsewhere on the server. Recursion no longer follows symlinks (links are removed as links), symlinked root entries are skipped entirely, and file quarantine now refuses symlinks so its write-fallback cannot overwrite an unrelated file.
+* Data-loss risk removed (HIGH). Malicious root folders were permanently deleted with no backup, and the name-pattern rule matches any 4-digit folder plus names like page/tag/portfolio — a false positive meant irreversible loss of a legitimate folder. Flagged folders are now MOVED to the access-denied quarantine folder instead of deleted: the spam stops being served from the web root, and a mistake is recoverable.
+* TOTP replay protection added (MEDIUM). A valid 2FA code could be reused throughout its ~90-second validity window; the last accepted time step is now recorded per user and that step (or earlier) is rejected on reuse.
+* Dedicated 2FA brute-force lockout (MEDIUM). Code-entry throttling previously depended on the separate "login protection" toggle; 2FA now enforces its own limit (5 wrong codes -> 15-minute lock per IP+user) regardless of that setting.
+* WPScan token no longer written into the page (MEDIUM). The token was rendered into the input's value attribute, readable via View Source/DOM despite type="password". It is now never emitted; leaving the field blank keeps the stored token, and a separate checkbox clears it (matching the VirusTotal key behavior).
+* Password-reset flood protection added (MEDIUM). The lostpassword flow bypasses the authenticate chain and was unthrottled, allowing unlimited wp_mail() sends (mailbox bombing). It is now rate limited per IP.
+* Missing capability check added (LOW). The root-folder scan/quarantine ran on admin_init for any logged-in user, including subscribers; it now requires manage_options.
+* Sensitive-data leak in logs closed (LOW). The full REQUEST_URI including the query string was stored and emailed, which could capture password-reset keys and similar tokens. Only the path is recorded now.
+* Path containment tightened (LOW). A request-derived file path used a bare strpos() prefix check, which also matched sibling directories (e.g. /var/www/site vs /var/www/site-backup); the check is now separator-aware.
+* Uninstall cleanup completed. TOTP secrets and 2FA user meta, the counters table, the version option, and leftover plugin transients are now removed on uninstall (multisite-aware).
+* Upgrade routine added: schema and new setting keys are now applied on version change, not only on activation.
 
 = 2.8.1 =
 * False-positive fix: the uploads .htaccess check is now DIRECTION-AWARE. Protective directives that DISABLE PHP — "RemoveHandler .php", "php_flag engine off", "SetHandler none/default-handler" (shipped intentionally by WPForms, WooCommerce, and others) — are no longer flagged as dangerous. Only directives that ENABLE PHP execution (AddHandler/AddType/SetHandler with a PHP handler, "php_flag engine on", auto_prepend/append_file, allow_url_include on) or embedded code/obfuscation still trigger the uploads_htaccess_tehlikeli alert. Comment lines are ignored.

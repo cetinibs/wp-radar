@@ -11,6 +11,76 @@ class WPGK_Logger {
 
 	const TABLO = 'wpgk_olaylar';
 
+	/** Atomik sayaç tablosu (yarış koşulu olmadan IP başına olay sayımı). */
+	const SAYAC_TABLO = 'wpgk_sayaclar';
+
+	/**
+	 * IP/olay sayacını ATOMİK olarak artırır ve yeni değeri döndürür.
+	 *
+	 * Neden gerekli: get_transient() → ++ → set_transient() kalıbı bir
+	 * read-modify-write yarış koşuludur. Eşzamanlı N istek aynı değeri okuyup
+	 * aynı değeri yazabilir; böylece N başarısız giriş 1 olarak sayılır ve
+	 * brute-force kilidi paralel isteklerle atlatılabilir. MySQL'in
+	 * "INSERT ... ON DUPLICATE KEY UPDATE" ifadesi tek satır üzerinde atomiktir.
+	 *
+	 * @param string $anahtar Sayaç anahtarı.
+	 * @param int    $ttl     Pencere süresi (saniye).
+	 * @return int Artırım sonrası değer (en az 1).
+	 */
+	public static function sayac_arttir( $anahtar, $ttl ) {
+		global $wpdb;
+		$tablo   = $wpdb->prefix . self::SAYAC_TABLO;
+		$anahtar = substr( (string) $anahtar, 0, 64 );
+		$simdi   = time();
+		$biten   = $simdi + max( 1, (int) $ttl );
+
+		// Pencere dolmuşsa sayacı 1'e sıfırla ve yeni pencere aç; aksi halde artır.
+		$sonuc = $wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO {$tablo} (anahtar, sayi, biten) VALUES (%s, 1, %d)
+				ON DUPLICATE KEY UPDATE
+					sayi  = IF(biten < %d, 1, sayi + 1),
+					biten = IF(biten < %d, %d, biten)",
+				$anahtar,
+				$biten,
+				$simdi,
+				$simdi,
+				$biten
+			)
+		);
+
+		if ( false === $sonuc ) {
+			// Tablo yoksa/sorgu başarısızsa güvenli tarafa düş: transient'e geri dön.
+			$n = (int) get_transient( 'wpgk_sayac_' . md5( $anahtar ) ) + 1;
+			set_transient( 'wpgk_sayac_' . md5( $anahtar ), $n, max( 1, (int) $ttl ) );
+			return $n;
+		}
+
+		$deger = (int) $wpdb->get_var(
+			$wpdb->prepare( "SELECT sayi FROM {$tablo} WHERE anahtar = %s", $anahtar )
+		);
+		return max( 1, $deger );
+	}
+
+	/**
+	 * Bir sayacı sıfırlar (kilit uygulandıktan sonra).
+	 */
+	public static function sayac_sifirla( $anahtar ) {
+		global $wpdb;
+		$tablo = $wpdb->prefix . self::SAYAC_TABLO;
+		$wpdb->delete( $tablo, array( 'anahtar' => substr( (string) $anahtar, 0, 64 ) ), array( '%s' ) );
+		delete_transient( 'wpgk_sayac_' . md5( (string) $anahtar ) );
+	}
+
+	/**
+	 * Süresi geçmiş sayaç satırlarını temizler (günlük bakım).
+	 */
+	public static function sayac_buda() {
+		global $wpdb;
+		$tablo = $wpdb->prefix . self::SAYAC_TABLO;
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$tablo} WHERE biten < %d", time() ) );
+	}
+
 	/**
 	 * Veritabanı log tablosunu oluşturur.
 	 */
@@ -32,6 +102,15 @@ class WPGK_Logger {
 			PRIMARY KEY (id),
 			KEY zaman (zaman),
 			KEY modul (modul)
+		) {$collate};";
+
+		$sayac_tablo = $wpdb->prefix . self::SAYAC_TABLO;
+		$sql        .= " CREATE TABLE {$sayac_tablo} (
+			anahtar VARCHAR(64) NOT NULL,
+			sayi INT UNSIGNED NOT NULL DEFAULT 0,
+			biten BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY (anahtar),
+			KEY biten (biten)
 		) {$collate};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -60,7 +139,10 @@ class WPGK_Logger {
 				'mesaj'        => $mesaj,
 				'ip'           => self::ip_al(),
 				'kullanici_id' => get_current_user_id(),
-				'istek_uri'    => isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '',
+				// Yalnızca YOL kısmı saklanır; sorgu dizesi ATILIR. Aksi halde
+				// şifre sıfırlama anahtarı (?key=...&login=...) gibi hassas
+				// parametreler log tablosuna ve e-postalara sızabilir.
+				'istek_uri'    => self::istek_yolu(),
 			),
 			array( '%s', '%s', '%s', '%s', '%s', '%d', '%s' )
 		);
@@ -107,13 +189,13 @@ class WPGK_Logger {
 		$pencere = max( 1, (int) ( isset( $ayarlar['oto_engel_pencere_dk'] ) ? $ayarlar['oto_engel_pencere_dk'] : 60 ) );
 		$sure    = max( 1, (int) ( isset( $ayarlar['oto_engel_sure_dk'] ) ? $ayarlar['oto_engel_sure_dk'] : 60 ) );
 
-		$sayac = 'wpgk_ihlal_' . md5( $ip );
-		$n     = (int) get_transient( $sayac ) + 1;
-		set_transient( $sayac, $n, $pencere * MINUTE_IN_SECONDS );
+		// Atomik sayaç: eşzamanlı isteklerle eşiğin atlatılmasını önler.
+		$sayac = 'ihlal_' . md5( $ip );
+		$n     = self::sayac_arttir( $sayac, $pencere * MINUTE_IN_SECONDS );
 
 		if ( $n >= $esik ) {
 			set_transient( 'wpgk_otoblok_' . md5( $ip ), 1, $sure * MINUTE_IN_SECONDS );
-			delete_transient( $sayac );
+			self::sayac_sifirla( $sayac );
 			// Not: 'otomatik_ip_engel' olayı yukarıda sayımdan muaf tutulduğu için
 			// bu çağrı sonsuz döngüye girmez; kritik seviye e-posta bildirimi tetikler.
 			self::kaydet(
@@ -237,8 +319,12 @@ class WPGK_Logger {
 	 *    sonra REMOTE_ADDR.
 	 */
 	public static function ip_al() {
-		$ayarlar     = get_option( 'wpgk_ayarlar', array() );
-		$proxy_guven = ! empty( $ayarlar['proxy_guven'] );
+		$ayarlar = get_option( 'wpgk_ayarlar', array() );
+		// Proxy başlıklarına YALNIZCA hem ayar açıksa hem de isteğin gerçekten
+		// güvenilir bir proxy/CDN kenarından geldiği (REMOTE_ADDR doğrulaması)
+		// kanıtlanmışsa güvenilir. Aksi halde herkes X-Forwarded-For uydurup
+		// tüm IP tabanlı korumaları atlatabilir ya da masum bir IP'yi engelletebilir.
+		$proxy_guven = ! empty( $ayarlar['proxy_guven'] ) && self::proxy_kaynagi_guvenilir_mi();
 
 		if ( $proxy_guven ) {
 			// Cloudflare gibi proxy'lerin yazdığı, istemcinin geçersiz kılamadığı başlık.
@@ -261,6 +347,76 @@ class WPGK_Logger {
 
 		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) ) : '';
 		return filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '0.0.0.0';
+	}
+
+	/**
+	 * İstek, GERÇEKTEN güvenilir bir proxy/CDN kenarından mı geliyor?
+	 *
+	 * Yalnızca soket adresi (REMOTE_ADDR — sahtelenemez) bilinen bir Cloudflare
+	 * aralığında ya da yöneticinin tanımladığı özel proxy listesindeyse true.
+	 * Böylece "proxy_guven" açık olsa bile doğrudan gelen istekler kendi
+	 * IP'lerini uyduramaz.
+	 *
+	 * Özel proxy/yük dengeleyici için: add_filter( 'wpgk_guvenilir_proxyler', ... )
+	 * ile kendi IP/CIDR listenizi ekleyebilirsiniz.
+	 */
+	protected static function proxy_kaynagi_guvenilir_mi() {
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) ) : '';
+		if ( ! filter_var( $remote, FILTER_VALIDATE_IP ) ) {
+			return false;
+		}
+
+		// Cloudflare yayınlanmış kenar aralıkları (IPv4 + IPv6 önekleri).
+		$guvenilir = array(
+			'173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+			'141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+			'197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+			'104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+		);
+		$ipv6_onek = array( '2400:cb00:', '2606:4700:', '2803:f800:', '2405:b500:', '2405:8100:', '2a06:98c0:', '2c0f:f248:' );
+
+		/**
+		 * Güvenilir proxy IP/CIDR listesini genişletmeye izin ver.
+		 */
+		$guvenilir = apply_filters( 'wpgk_guvenilir_proxyler', $guvenilir );
+
+		// IPv6 önek eşleşmesi (Cloudflare).
+		if ( false !== strpos( $remote, ':' ) ) {
+			$dusuk = strtolower( $remote );
+			foreach ( $ipv6_onek as $onek ) {
+				if ( 0 === strpos( $dusuk, $onek ) ) {
+					return true;
+				}
+			}
+		}
+
+		if ( ! class_exists( 'WPGK_Login_Security' ) ) {
+			return false;
+		}
+		foreach ( $guvenilir as $kural ) {
+			if ( WPGK_Login_Security::ip_eslesir_mi( $remote, $kural ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * İstek URI'sinin YALNIZCA yol kısmını döndürür (sorgu dizesi atılır).
+	 *
+	 * Sorgu dizesi şifre sıfırlama anahtarı, nonce veya oturum jetonu gibi
+	 * hassas veriler taşıyabilir; bunlar log tablosuna veya e-postaya yazılmamalıdır.
+	 */
+	public static function istek_yolu() {
+		if ( empty( $_SERVER['REQUEST_URI'] ) ) {
+			return '';
+		}
+		$uri = wp_unslash( $_SERVER['REQUEST_URI'] );
+		$yol = wp_parse_url( $uri, PHP_URL_PATH );
+		if ( ! is_string( $yol ) || '' === $yol ) {
+			$yol = strtok( (string) $uri, '?' );
+		}
+		return substr( esc_url_raw( (string) $yol ), 0, 255 );
 	}
 
 	/**

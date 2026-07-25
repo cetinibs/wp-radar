@@ -3,7 +3,7 @@
  * Plugin Name:       CK Radar Security
  * Plugin URI:        https://github.com/cetinibs/wp-radar
  * Description:        Comprehensive WordPress security: brute-force/login protection, security headers and hardening, core file integrity, exploit/intrusion blocking, unauthorized user and root-folder detection, and malicious link / SEO-spam cleanup.
- * Version:           2.8.1
+ * Version:           2.9.0
  * Requires at least: 5.0
  * Requires PHP:      7.0
  * Author:            Çetin Kaya
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Doğrudan erişim engellendi.
 }
 
-define( 'WPGK_VERSION', '2.8.1' );
+define( 'WPGK_VERSION', '2.9.0' );
 define( 'WPGK_FILE', __FILE__ );
 define( 'WPGK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPGK_URL', plugin_dir_url( __FILE__ ) );
@@ -89,8 +89,11 @@ function wpgk_varsayilan_ayarlar() {
 		'giris_kilit_dk'          => 15,
 		'giris_jenerik_hata'      => 1,
 		// IP kaynağı: 1 = proxy/CDN başlıklarına güven (XFF/CF), 0 = yalnızca REMOTE_ADDR.
-		// Site bir CDN/ters proxy ARKASINDA DEĞİLSE, sahtecilik koruması için 0 önerilir.
-		'proxy_guven'             => 1,
+		// GÜVENLİK: Varsayılan 0 (KAPALI). Açık olsa bile başlıklar ancak isteğin
+		// gerçekten bilinen bir Cloudflare kenarından geldiği REMOTE_ADDR ile
+		// doğrulanırsa kabul edilir; aksi halde saldırgan X-Forwarded-For uydurup
+		// tüm IP tabanlı korumaları atlatabilir veya masum bir IP'yi engelletebilir.
+		'proxy_guven'             => 0,
 		// Giriş güvenliği (2FA / CAPTCHA / IP listeleri) — varsayılan kapalı (opt-in).
 		'giris_2fa'               => 0,
 		'giris_captcha'           => 0,
@@ -146,6 +149,7 @@ function wpgk_etkinlestir() {
 	WPGK_Logger::tablo_olustur();
 	WPGK_File_Guard::baseline_olustur();
 	WPGK_Hardening::htaccess_yaz();
+	update_option( 'wpgk_surum', WPGK_VERSION );
 
 	if ( ! wp_next_scheduled( 'wpgk_gunluk_tarama' ) ) {
 		wp_schedule_event( time(), 'daily', 'wpgk_gunluk_tarama' );

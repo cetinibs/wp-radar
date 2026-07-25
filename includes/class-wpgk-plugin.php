@@ -44,10 +44,39 @@ final class WPGK_Plugin {
 			$this->admin = new WPGK_Admin();
 		}
 
-		// Günlük bakım: log tablosunu buda.
+		// Sürüm yükseltmelerinde şema/ayar güncellemesi (aktivasyon kancası
+		// güncellemede yeniden çalışmadığı için gereklidir).
+		add_action( 'admin_init', array( $this, 'yukseltme_kontrol' ) );
+
+		// Günlük bakım: log tablosunu ve süresi geçmiş sayaçları buda.
 		add_action( 'wpgk_gunluk_tarama', array( 'WPGK_Logger', 'buda' ) );
+		add_action( 'wpgk_gunluk_tarama', array( 'WPGK_Logger', 'sayac_buda' ) );
 
 		load_plugin_textdomain( 'ck-radar-security', false, dirname( WPGK_BASENAME ) . '/languages' );
+	}
+
+	/**
+	 * Eklenti sürümü değiştiyse şemayı ve yeni ayar anahtarlarını günceller.
+	 * (Yeni atomik sayaç tablosu mevcut kurulumlarda böyle oluşturulur.)
+	 */
+	public function yukseltme_kontrol() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$kurulu = get_option( 'wpgk_surum', '' );
+		if ( WPGK_VERSION === $kurulu ) {
+			return;
+		}
+
+		WPGK_Logger::tablo_olustur();
+
+		// Yeni varsayılan anahtarları mevcut ayarlara ekle (mevcut değerleri korur).
+		if ( function_exists( 'wpgk_varsayilan_ayarlar' ) ) {
+			$mevcut = get_option( 'wpgk_ayarlar', array() );
+			update_option( 'wpgk_ayarlar', array_merge( wpgk_varsayilan_ayarlar(), (array) $mevcut ) );
+		}
+
+		update_option( 'wpgk_surum', WPGK_VERSION );
 	}
 
 	private function __clone() {}

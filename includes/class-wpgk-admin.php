@@ -55,6 +55,22 @@ class WPGK_Admin {
 	}
 
 	/**
+	 * WPScan token'ı kaydeder. Token hiçbir zaman forma yazılmadığı için boş
+	 * gönderim "değiştirme" demektir → mevcut token korunur. Silme, ayrı bir
+	 * onay kutusuyla yapılır. (VirusTotal anahtarıyla aynı desen.)
+	 */
+	protected function wpscan_token_kaydet() {
+		$mevcut = get_option( 'wpgk_ayarlar', array() );
+		$eski   = isset( $mevcut['wpscan_token'] ) ? (string) $mevcut['wpscan_token'] : '';
+
+		if ( isset( $_POST['wpscan_token_sil'] ) ) {
+			return '';
+		}
+		$girilen = isset( $_POST['wpscan_token'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['wpscan_token'] ) ) : '';
+		return ( '' !== $girilen ) ? $girilen : $eski;
+	}
+
+	/**
 	 * "Test e-postası gönder" butonu: kayıtlı alıcılara test bildirimi yollar.
 	 */
 	public function test_eposta_gonder() {
@@ -243,7 +259,7 @@ class WPGK_Admin {
 			'oto_engel_sure_dk'     => isset( $_POST['oto_engel_sure_dk'] ) ? max( 1, min( 10080, (int) $_POST['oto_engel_sure_dk'] ) ) : 60,
 			// Zafiyet taraması (WPScan)
 			'vuln_tarama'           => isset( $_POST['vuln_tarama'] ) ? 1 : 0,
-			'wpscan_token'          => isset( $_POST['wpscan_token'] ) ? preg_replace( '/[^a-zA-Z0-9]/', '', wp_unslash( $_POST['wpscan_token'] ) ) : '',
+			'wpscan_token'          => $this->wpscan_token_kaydet(),
 			// Giriş / brute-force
 			'giris_korumasi'        => isset( $_POST['giris_korumasi'] ) ? 1 : 0,
 			'giris_jenerik_hata'    => isset( $_POST['giris_jenerik_hata'] ) ? 1 : 0,
@@ -531,7 +547,13 @@ class WPGK_Admin {
 					<?php $ws_kayitli = ! empty( $ayarlar['wpscan_token'] ); ?>
 					<div style="padding:8px 0;">
 						<strong>WPScan API token:</strong>
-						<input type="password" name="wpscan_token" class="regular-text" autocomplete="off" value="<?php echo esc_attr( isset( $ayarlar['wpscan_token'] ) ? $ayarlar['wpscan_token'] : '' ); ?>" placeholder="<?php echo esc_attr( $ws_kayitli ? '•••• kayıtlı' : 'WPScan API token' ); ?>" />
+						<?php /* Token ASLA HTML'e yazılmaz: type="password" olsa da değer sayfa kaynağında/DOM'da okunabilirdi. Boş bırakılırsa mevcut token korunur. */ ?>
+						<input type="password" name="wpscan_token" class="regular-text" autocomplete="off" value="" placeholder="<?php echo esc_attr( $ws_kayitli ? '•••• kayıtlı (değiştirmek için yeni token girin)' : 'WPScan API token' ); ?>" />
+						<?php if ( $ws_kayitli ) : ?>
+							<label style="display:block;margin-top:4px;">
+								<input type="checkbox" name="wpscan_token_sil" value="1" /> Kayıtlı token'ı sil
+							</label>
+						<?php endif; ?>
 						<p class="description"><a href="https://wpscan.com/api" target="_blank" rel="noopener">wpscan.com/api</a> üzerinden ücretsiz token alın (~25 istek/gün). Token olmadan bu modül çalışmaz.</p>
 					</div>
 				</div>

@@ -51,14 +51,13 @@ class WPGK_Rate_Limit {
 			$this->reddet( $kilit );
 		}
 
-		$sayac_anahtar = 'wpgk_oran_' . $ip_md;
-		$sayi = (int) get_transient( $sayac_anahtar );
-		$sayi++;
-		set_transient( $sayac_anahtar, $sayi, $pencere );
+		// ATOMİK sayaç (yarış koşulu olmadan): paralel isteklerle sınır atlatılamaz.
+		$sayac_anahtar = 'oran_' . $ip_md;
+		$sayi          = WPGK_Logger::sayac_arttir( $sayac_anahtar, $pencere );
 
 		if ( $sayi > $max ) {
 			set_transient( $kilit_anahtar, 1, $kilit * MINUTE_IN_SECONDS );
-			delete_transient( $sayac_anahtar );
+			WPGK_Logger::sayac_sifirla( $sayac_anahtar );
 			WPGK_Logger::kaydet(
 				'oran',
 				'oran_limit_kilit',

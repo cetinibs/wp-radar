@@ -25,6 +25,47 @@ class WPGK_Login_Guard {
 
 		// Kullanıcı adı/e-posta sızdırmamak için jenerik hata.
 		add_filter( 'login_errors', array( $this, 'jenerik_hata' ) );
+
+		// Şifre sıfırlama (lostpassword) flood koruması: bu akış wp_authenticate()
+		// üzerinden geçmediği için brute-force sayacına takılmıyordu; korumasız
+		// bırakıldığında sınırsız wp_mail() tetiklenerek hedef posta kutusu
+		// bombalanabilir ve DB sorgusu üretilebilir.
+		add_action( 'lostpassword_post', array( $this, 'sifirlama_limiti' ), 1 );
+	}
+
+	/**
+	 * Şifre sıfırlama isteklerini IP başına sınırlar (pencere başına en çok 5).
+	 */
+	public function sifirlama_limiti( $errors = null ) {
+		if ( ! $this->aktif() ) {
+			return;
+		}
+		$ip = WPGK_Logger::ip_al();
+		if ( class_exists( 'WPGK_Login_Security' ) && WPGK_Login_Security::beyaz_listede_mi( $ip ) ) {
+			return;
+		}
+
+		$max     = max( 1, (int) $this->ayar( 'giris_max_deneme', 5 ) );
+		$pencere = max( 15, (int) $this->ayar( 'giris_kilit_dk', 15 ) );
+		$sayi    = WPGK_Logger::sayac_arttir( 'sifirla_' . md5( $ip ), $pencere * MINUTE_IN_SECONDS );
+
+		if ( $sayi > $max ) {
+			WPGK_Logger::kaydet(
+				'giris',
+				'sifirlama_flood',
+				sprintf( 'IP %s, %d dk içinde %d şifre sıfırlama isteği gönderdi; sınırlandırıldı.', $ip, $pencere, $sayi ),
+				'uyari'
+			);
+			if ( is_wp_error( $errors ) ) {
+				$errors->add( 'wpgk_sifirlama_limit', esc_html__( 'Çok fazla şifre sıfırlama isteği. Lütfen daha sonra tekrar deneyin.', 'ck-radar-security' ) );
+				return;
+			}
+			wp_die(
+				esc_html__( 'Çok fazla şifre sıfırlama isteği. Lütfen daha sonra tekrar deneyin.', 'ck-radar-security' ),
+				esc_html__( 'Çok Fazla İstek', 'ck-radar-security' ),
+				array( 'response' => 429 )
+			);
+		}
 	}
 
 	protected function ayar( $anahtar, $varsayilan = null ) {
@@ -77,14 +118,15 @@ class WPGK_Login_Guard {
 		$dk    = max( 1, (int) $this->ayar( 'giris_kilit_dk', 15 ) );
 		$pencere = max( $dk, 15 );
 
-		$anahtar = $this->deneme_anahtari();
-		$sayi    = (int) get_transient( $anahtar );
-		$sayi++;
-		set_transient( $anahtar, $sayi, $pencere * MINUTE_IN_SECONDS );
+		// ATOMİK sayaç: get/set transient kalıbı bir yarış koşuluydu; paralel
+		// gönderilen N deneme aynı değeri okuyup 1 olarak sayılabiliyor ve kilit
+		// atlatılabiliyordu. Artık tek MySQL ifadesiyle atomik artırılıyor.
+		$anahtar = 'giris_' . md5( WPGK_Logger::ip_al() );
+		$sayi    = WPGK_Logger::sayac_arttir( $anahtar, $pencere * MINUTE_IN_SECONDS );
 
 		if ( $sayi >= $max ) {
 			set_transient( $this->kilit_anahtari(), 1, $dk * MINUTE_IN_SECONDS );
-			delete_transient( $anahtar );
+			WPGK_Logger::sayac_sifirla( $anahtar );
 			WPGK_Logger::kaydet(
 				'giris',
 				'brute_force_kilit',
@@ -100,6 +142,7 @@ class WPGK_Login_Guard {
 	 * Başarılı girişte sayaçları temizle.
 	 */
 	public function basarili_giris( $user_login, $user = null ) {
+		WPGK_Logger::sayac_sifirla( 'giris_' . md5( WPGK_Logger::ip_al() ) );
 		delete_transient( $this->deneme_anahtari() );
 		delete_transient( $this->kilit_anahtari() );
 	}

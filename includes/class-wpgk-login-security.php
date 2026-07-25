@@ -16,8 +16,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WPGK_Login_Security {
 
-	const META_SECRET = 'wpgk_2fa_secret';
-	const META_AKTIF  = 'wpgk_2fa_aktif';
+	const META_SECRET   = 'wpgk_2fa_secret';
+	const META_AKTIF    = 'wpgk_2fa_aktif';
+	/** Son kullanılan TOTP adımı (tekrar/replay saldırısı koruması). */
+	const META_SON_ADIM = 'wpgk_2fa_son_adim';
 
 	public function __construct() {
 		// IP kara/beyaz liste uygulaması (mümkün olan en erken aşama).
@@ -56,7 +58,7 @@ class WPGK_Login_Security {
 	/**
 	 * Bir IP, verilen kurala (tam IP veya IPv4 CIDR) uyuyor mu?
 	 */
-	protected static function ip_eslesir_mi( $ip, $kural ) {
+	public static function ip_eslesir_mi( $ip, $kural ) {
 		if ( $ip === $kural ) {
 			return true;
 		}
@@ -225,11 +227,30 @@ class WPGK_Login_Security {
 		if ( '' === $kod ) {
 			return new WP_Error( 'wpgk_2fa_gerekli', __( '<strong>Doğrulama gerekli:</strong> Lütfen 2FA uygulamanızdaki 6 haneli kodu girin.', 'ck-radar-security' ) );
 		}
+		// 2FA'YA ÖZEL brute-force sınırı: kod denemeleri, ayrı bir ayar olan
+		// "giris_korumasi" kapalı olsa bile sınırlandırılır. Aksi halde parolayı
+		// ele geçirmiş bir saldırgan için 6 haneli kod sınırsız denenebilir bir
+		// oracle'a dönüşürdü.
+		$ip           = WPGK_Logger::ip_al();
+		$kilit_anahtar = 'wpgk_2fa_kilit_' . md5( $ip . '|' . $user->ID );
+		if ( get_transient( $kilit_anahtar ) ) {
+			return new WP_Error( 'wpgk_2fa_kilit', __( '<strong>Engellendi:</strong> Çok fazla hatalı doğrulama kodu. Lütfen birazdan tekrar deneyin.', 'ck-radar-security' ) );
+		}
+
 		$secret = (string) get_user_meta( $user->ID, self::META_SECRET, true );
-		if ( ! self::totp_dogrula( $secret, $kod ) ) {
-			WPGK_Logger::kaydet( 'giris', '2fa_basarisiz', 'Hatalı 2FA kodu: ' . $user->user_login, 'uyari' );
+		if ( ! self::totp_dogrula( $secret, $kod, $user->ID ) ) {
+			$deneme = WPGK_Logger::sayac_arttir( '2fa_' . md5( $ip . '|' . $user->ID ), 15 * MINUTE_IN_SECONDS );
+			if ( $deneme >= 5 ) {
+				set_transient( $kilit_anahtar, 1, 15 * MINUTE_IN_SECONDS );
+				WPGK_Logger::kaydet( 'giris', '2fa_kilit', sprintf( '5 hatalı 2FA kodundan sonra 15 dk kilitlendi: %s (IP %s)', $user->user_login, $ip ), 'kritik' );
+			} else {
+				WPGK_Logger::kaydet( 'giris', '2fa_basarisiz', sprintf( 'Hatalı veya tekrar kullanılmış 2FA kodu (%d/5): %s', $deneme, $user->user_login ), 'uyari' );
+			}
 			return new WP_Error( 'wpgk_2fa_hata', __( '<strong>Hata:</strong> Doğrulama kodu geçersiz.', 'ck-radar-security' ) );
 		}
+
+		// Başarılı doğrulama: deneme sayacını sıfırla.
+		WPGK_Logger::sayac_sifirla( '2fa_' . md5( $ip . '|' . $user->ID ) );
 		return $user;
 	}
 
@@ -288,16 +309,31 @@ class WPGK_Login_Security {
 	/**
 	 * TOTP kodunu ±1 zaman penceresiyle (saat kayması toleransı) doğrular.
 	 */
-	public static function totp_dogrula( $secret, $kod ) {
+	public static function totp_dogrula( $secret, $kod, $user_id = 0 ) {
 		$kod = preg_replace( '/\D/', '', (string) $kod );
 		if ( 6 !== strlen( $kod ) || '' === $secret ) {
 			return false;
 		}
 		$adim = (int) floor( time() / 30 );
+
+		// TEKRAR (REPLAY) KORUMASI: Aynı kod, geçerlilik penceresi (±1 adım, ~90 sn)
+		// boyunca birden çok kez kullanılabiliyordu. Omuz sörfü, keylogger veya ağ
+		// yakalamasıyla ele geçirilen bir kod bu pencerede yeniden oynatılabilirdi.
+		// Kullanılan en son adım saklanır; o adım ve öncesi bir daha kabul edilmez.
+		$son_adim = $user_id ? (int) get_user_meta( $user_id, self::META_SON_ADIM, true ) : 0;
+
 		for ( $d = -1; $d <= 1; $d++ ) {
-			if ( hash_equals( self::totp_kod( $secret, $adim + $d ), $kod ) ) {
-				return true;
+			$mevcut = $adim + $d;
+			if ( ! hash_equals( self::totp_kod( $secret, $mevcut ), $kod ) ) {
+				continue;
 			}
+			if ( $user_id ) {
+				if ( $son_adim && $mevcut <= $son_adim ) {
+					return false; // Bu kod (veya daha eskisi) zaten kullanıldı.
+				}
+				update_user_meta( $user_id, self::META_SON_ADIM, $mevcut );
+			}
+			return true;
 		}
 		return false;
 	}
@@ -327,6 +363,7 @@ class WPGK_Login_Security {
 		if ( isset( $_POST['wpgk_2fa_kapat'] ) ) {
 			delete_user_meta( $uid, self::META_AKTIF );
 			delete_user_meta( $uid, self::META_SECRET );
+			delete_user_meta( $uid, self::META_SON_ADIM );
 			set_transient( 'wpgk_2fa_mesaj_' . $uid, 'kapatildi', 30 );
 			wp_safe_redirect( admin_url( 'admin.php?page=wpgk-2fa' ) );
 			exit;
@@ -335,7 +372,10 @@ class WPGK_Login_Security {
 		// Etkinleştirmeyi onayla: bekleyen gizli anahtarı doğrulama koduyla aktive et.
 		$secret = isset( $_POST['wpgk_2fa_secret'] ) ? preg_replace( '/[^A-Z2-7]/', '', strtoupper( wp_unslash( $_POST['wpgk_2fa_secret'] ) ) ) : '';
 		$kod    = isset( $_POST['wpgk_2fa_dogrula'] ) ? wp_unslash( $_POST['wpgk_2fa_dogrula'] ) : '';
-		if ( $secret && self::totp_dogrula( $secret, $kod ) ) {
+		// Yeni kayıt: eski replay sayacını temizle, sonra doğrula. $uid geçilir ki
+		// kurulumda kullanılan kod girişte tekrar oynatılamasın.
+		delete_user_meta( $uid, self::META_SON_ADIM );
+		if ( $secret && self::totp_dogrula( $secret, $kod, $uid ) ) {
 			update_user_meta( $uid, self::META_SECRET, $secret );
 			update_user_meta( $uid, self::META_AKTIF, '1' );
 			set_transient( 'wpgk_2fa_mesaj_' . $uid, 'aktif', 30 );
